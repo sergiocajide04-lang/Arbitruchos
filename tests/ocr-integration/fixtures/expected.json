@@ -1,0 +1,24 @@
+{
+  "strava-es.png": {
+    "km": 8.42,
+    "durationS": 2915,
+    "paceS": 346,
+    "calories": 612,
+    "source": "strava",
+    "date": "2026-10-20"
+  },
+  "apple-dark-en.png": {
+    "km": 5.12,
+    "durationS": 1768,
+    "calories": 301,
+    "caloriesKind": "active",
+    "source": "apple"
+  },
+  "gym-console.png": {
+    "km": 2.15,
+    "durationS": 730,
+    "calories": 160,
+    "source": "gym_console",
+    "activityType": "treadmill"
+  }
+}

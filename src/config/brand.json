@@ -1,0 +1,28 @@
+{
+  "name": "REFRUN",
+  "wordmark": ["REF", "RUN"],
+  "fullName": "REFRUN · Reto de árbitros",
+  "tagline": "Cada gol del partido, un kilómetro en tu semana.",
+  "description": "Reto de carrera para árbitros de hockey sobre patines: los goles de tu partido marcan los kilómetros de tu semana.",
+  "lang": "es",
+  "colors": {
+    "background": "#0E0F11",
+    "surface": "#16181C",
+    "lime": "#C6F432",
+    "limeDeep": "#9BC41A",
+    "ink": "#0E0F11",
+    "white": "#F2F4F5"
+  },
+  "mark": {
+    "viewBox": "0 0 512 512",
+    "ring": "M164.1 224.8A140 140 0 1 1 164.1 343.2",
+    "ringWidth": 40,
+    "speedLines": ["M105 252H163", "M71 284H185", "M105 316H163"],
+    "speedLineWidth": 22,
+    "hand": "M291 284L350 213.5",
+    "handWidth": 26,
+    "hub": { "cx": 291, "cy": 284, "r": 22, "innerR": 8 },
+    "crownStem": { "x": 275, "y": 94, "width": 32, "height": 40 },
+    "crownCap": { "x": 249, "y": 68, "width": 84, "height": 32, "rx": 12 }
+  }
+}

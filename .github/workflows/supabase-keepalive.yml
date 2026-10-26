@@ -1,0 +1,25 @@
+name: Mantener activo Supabase (opcional)
+
+# Los proyectos del plan gratuito de Supabase se pausan tras un periodo sin actividad.
+# Este workflow hace una petición ligera cada 3 días. Está DESACTIVADO salvo que crees
+# la variable de repositorio SUPABASE_KEEPALIVE = true. No garantiza que el proyecto
+# no se pause: consulta la política vigente de Supabase.
+on:
+  schedule:
+    - cron: '17 6 */3 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    if: vars.SUPABASE_KEEPALIVE == 'true' && vars.VITE_SUPABASE_URL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Petición de salud a la API
+        run: |
+          curl -fsS -o /dev/null -w "HTTP %{http_code}\n" \
+            -H "apikey: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}" \
+            "${{ vars.VITE_SUPABASE_URL }}/auth/v1/health"

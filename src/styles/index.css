@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Tokens de color (canales RGB para poder usar opacidad en Tailwind).
+ * Tema oscuro por defecto; el claro se activa con data-theme="light".
+ * Los valores de marca de referencia están en src/config/brand.json.
+ */
+@layer base {
+  :root,
+  [data-theme='dark'] {
+    color-scheme: dark;
+    --c-bg: 14 15 17;
+    --c-surface: 22 24 28;
+    --c-surface-2: 31 34 40;
+    --c-border: 46 50 58;
+    --c-fg: 242 244 245;
+    --c-muted: 160 168 179;
+    --c-accent: 198 244 50;
+    --c-accent-fg: 14 15 17;
+    --c-accent-text: 205 247 72;
+    --c-danger: 255 120 104;
+    --c-warning: 255 190 92;
+    --c-info: 110 200 255;
+    --c-success: 120 226 150;
+  }
+
+  [data-theme='light'] {
+    color-scheme: light;
+    --c-bg: 243 244 240;
+    --c-surface: 255 255 255;
+    --c-surface-2: 236 238 232;
+    --c-border: 218 221 212;
+    --c-fg: 18 20 23;
+    --c-muted: 86 94 105;
+    --c-accent: 198 244 50;
+    --c-accent-fg: 14 15 17;
+    --c-accent-text: 64 104 0;
+    --c-danger: 190 40 30;
+    --c-warning: 150 90 0;
+    --c-info: 0 104 160;
+    --c-success: 22 120 60;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-bg font-sans text-fg antialiased;
+    min-height: 100dvh;
+    overscroll-behavior-y: none;
+  }
+
+  ::selection {
+    background: rgb(var(--c-accent) / 0.35);
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--c-accent));
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+  }
+
+  /* Evita el zoom automático de iOS al enfocar campos (requiere ≥ 16px). */
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1rem);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .num {
+    font-family: theme('fontFamily.display');
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.005em;
+  }
+
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-muted;
+  }
+
+  .card {
+    @apply rounded-2xl border border-border/70 bg-surface shadow-card;
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /* Textura de pista: líneas diagonales muy sutiles para superficies destacadas. */
+  .track-texture {
+    background-image: repeating-linear-gradient(
+      -24deg,
+      rgb(var(--c-accent) / 0.05) 0 2px,
+      transparent 2px 22px
+    );
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}

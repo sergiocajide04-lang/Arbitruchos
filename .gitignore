@@ -1,0 +1,18 @@
+node_modules
+dist
+dist-ssr
+coverage
+*.local
+.env
+.env.*
+!.env.example
+# Recursos OCR copiados desde node_modules en cada build
+public/ocr
+.DS_Store
+Thumbs.db
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea
+supabase/.temp
+supabase/.branches

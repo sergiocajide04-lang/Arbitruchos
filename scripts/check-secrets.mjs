@@ -31,6 +31,8 @@ const patterns = [
   { name: 'Clave privada PEM', re: /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/g },
   { name: 'Token de GitHub', re: /gh[pousr]_[A-Za-z0-9]{30,}/g },
   { name: 'Clave de AWS', re: /AKIA[0-9A-Z]{16}/g },
+  // El código de envío de notificaciones (src/server) no debe acabar en el bundle.
+  { name: 'Código de servidor de notificaciones', re: /VAPID_PRIVATE_KEY|SUPABASE_SECRET_KEY/g },
 ];
 const jwtRe = /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g;
 

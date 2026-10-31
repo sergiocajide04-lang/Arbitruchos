@@ -65,27 +65,34 @@ export default function StatsPage() {
             <SeasonPicker />
           </div>
 
-          {/* ---------- Temporada acumulada ---------- */}
+          {/* ---------- Competición ---------- */}
           <Card className="relative overflow-hidden">
             <div aria-hidden className="track-texture pointer-events-none absolute inset-0" />
             <div className="relative p-5 sm:p-6">
-              <p className="eyebrow">Temporada acumulada · {who}</p>
+              <p className="eyebrow">Competición · {who}</p>
               <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
                 <p className="num text-5xl font-bold leading-none sm:text-6xl">
-                  {formatKm(s.summary.completedKm)}
-                  <span className="ml-1.5 text-xl text-muted">de {formatKm(s.summary.targetKm)} km</span>
+                  {formatKm(s.summary.attributableKm)}
+                  <span className="ml-1.5 text-xl text-muted">válidos de {formatKm(s.summary.targetKm)} km</span>
                 </p>
                 <p className="num text-4xl font-bold leading-none text-accent-text">{formatPct(s.summary.pct)}</p>
               </div>
-              <ProgressBar value={s.summary.pct} size="lg" className="mt-4" label="Kilómetros hechos sobre el objetivo acumulado" />
+              <ProgressBar value={s.summary.pct} size="lg" className="mt-4" label="Cumplimiento de objetivos" />
               <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
-                <Stat label="Objetivo acumulado" value={formatKm(s.summary.targetKm)} unit="km" hint={`${s.matches.length} partidos`} />
-                <Stat label="Km hechos" value={formatKm(s.summary.completedKm)} unit="km" emphasis />
-                <Stat
-                  label={s.summary.pendingKm > 0 ? 'Pendientes' : 'Por encima'}
-                  value={formatKm(s.summary.pendingKm > 0 ? s.summary.pendingKm : s.summary.extraKm)}
-                  unit="km"
-                />
+                <Stat label="Objetivos" value={formatKm(s.summary.targetKm)} unit="km" hint={`${s.matches.length} partidos`} />
+                <Stat label="Km válidos" value={formatKm(s.summary.attributableKm)} unit="km" emphasis />
+                <Stat label="Pendientes" value={formatKm(s.summary.pendingKm)} unit="km" />
+                <Stat label="Excedente" value={formatKm(s.summary.extraKm)} unit="km" hint="Fuera de competición" />
+              </div>
+            </div>
+          </Card>
+
+          {/* ---------- Estadísticas deportivas (distancia real) ---------- */}
+          <Card>
+            <CardHeader eyebrow="Estadísticas deportivas" title="Todo lo corrido en la temporada" as="h2" />
+            <div className="p-4 pt-3 sm:p-5 sm:pt-3">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
+                <Stat label="Km corridos" value={formatKm(s.summary.completedKm)} unit="km" emphasis hint="Incluye el excedente" />
                 <Stat label="Ritmo medio temporada" value={formatPace(s.seasonStats.pace)} unit={s.seasonStats.pace ? '/km' : undefined} hint="Ponderado por distancia" />
                 <Stat label="Entrenamientos" value={s.seasonStats.count} hint="Registrados y computables" />
                 <Stat
@@ -143,9 +150,9 @@ export default function StatsPage() {
             </div>
           </div>
           <p className="text-xs leading-relaxed text-muted">
-            {s.season.compliance_policy === 'season_total'
-              ? 'Objetivo acumulado = suma de los goles de todos los partidos registrados. Km hechos = suma de todos los entrenamientos confirmados que computan. Cumplimiento = km hechos ÷ objetivo acumulado.'
-              : 'Cumplimiento según la metodología de la temporada (ver Temporada).'}{' '}
+            Objetivo de cada partido = goles + amarillas×1 + azules×2 + rojas×5. Los km corridos se asignan primero a las deudas más antiguas y luego
+            al objetivo de la semana; lo que sobra es excedente y no se guarda para semanas futuras. Cumplimiento = km válidos ÷ objetivos de las
+            semanas ya iniciadas (máximo 100 %). Las estadísticas deportivas usan siempre la distancia real.{' '}
             Ritmo medio = tiempo total ÷ distancia total de los entrenamientos con duración
             conocida. Mejor ritmo: actividad de al menos 1 km.
           </p>

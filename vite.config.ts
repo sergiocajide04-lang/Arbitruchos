@@ -66,6 +66,8 @@ export default defineConfig(({ mode }) => {
           globIgnores: ['ocr/**', 'icons/splash-*.png', '404.html', '_redirects'],
           navigateFallback: 'index.html',
           navigateFallbackDenylist: [/\/ocr\//],
+          // Gestor de notificaciones push (public/push-sw.js).
+          importScripts: ['push-sw.js'],
           cleanupOutdatedCaches: true,
           clientsClaim: false,
           skipWaiting: false,

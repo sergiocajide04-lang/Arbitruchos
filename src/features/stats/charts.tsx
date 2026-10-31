@@ -264,7 +264,7 @@ export function CompliancePctChart({ data }: { data: WeekPoint[] }) {
   return (
     <ChartCard
       title="Cumplimiento semanal"
-      description="Porcentaje del objetivo de cada semana. La línea marca el 100 %."
+      description="Parte del objetivo de cada semana ya cubierta (también con km posteriores que saldaron la deuda). Máximo 100 %."
       empty={rows.length === 0 ? 'Aún no hay semanas con objetivo.' : null}
       table={<WeekTable rows={rows} cols={[{ label: 'Cumplimiento', value: (r) => formatPct(r.pct) }]} />}
     >

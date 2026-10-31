@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { parseGoals } from '@/domain/calc/goals';
+import { parseCards, parseGoals } from '@/domain/calc/goals';
 import { isIsoDate } from '@/lib/dates';
 import type { MatchInput } from '@/services/api';
 
@@ -15,6 +15,15 @@ const goals = z.string().superRefine((v, ctx) => {
   if (!r.ok) ctx.addIssue({ code: z.ZodIssueCode.custom, message: r.error });
 });
 
+// Los borradores guardados antes de existir las tarjetas no tienen estos campos.
+const cards = z
+  .string()
+  .optional()
+  .superRefine((v, ctx) => {
+    const r = parseCards(v);
+    if (!r.ok) ctx.addIssue({ code: z.ZodIssueCode.custom, message: r.error });
+  });
+
 export const matchFormSchema = z.object({
   matchDate: z.string().refine(isIsoDate, 'Indica la fecha del partido'),
   weekStart: z.string().refine(isIsoDate, 'Elige la semana de cumplimiento'),
@@ -24,6 +33,9 @@ export const matchFormSchema = z.object({
   awayTeam: optionalText(60),
   homeGoals: goals,
   awayGoals: goals,
+  yellowCards: cards,
+  blueCards: cards,
+  redCards: cards,
   notes: optionalText(500),
 });
 
@@ -33,7 +45,11 @@ export type MatchFormParsed = z.output<typeof matchFormSchema>;
 export function toMatchInput(v: MatchFormParsed): MatchInput {
   const home = parseGoals(v.homeGoals);
   const away = parseGoals(v.awayGoals);
+  const yellow = parseCards(v.yellowCards);
+  const blue = parseCards(v.blueCards);
+  const red = parseCards(v.redCards);
   if (!home.ok || !away.ok) throw new Error('Goles no válidos');
+  if (!yellow.ok || !blue.ok || !red.ok) throw new Error('Tarjetas no válidas');
   return {
     referee_id: v.refereeId,
     match_date: v.matchDate,
@@ -43,6 +59,9 @@ export function toMatchInput(v: MatchFormParsed): MatchInput {
     away_team: v.awayTeam,
     home_goals: home.value,
     away_goals: away.value,
+    yellow_cards: yellow.value,
+    blue_cards: blue.value,
+    red_cards: red.value,
     notes: v.notes,
   };
 }

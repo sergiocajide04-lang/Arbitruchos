@@ -26,9 +26,39 @@ describe('registro de partido', () => {
     await userEvent.type(await screen.findByLabelText('Goles del primer equipo'), '13');
     await userEvent.type(screen.getByLabelText('Goles del segundo equipo'), '1');
     const preview = screen.getByText('Previsualización').parentElement!;
-    expect(within(preview).getByText('13-1')).toBeInTheDocument();
+    expect(within(preview).getByText('Goles (13-1)')).toBeInTheDocument();
     expect(within(preview).getByText('14')).toBeInTheDocument();
     expect(within(preview).getByText('Marta López')).toBeInTheDocument();
+  });
+
+  it('las tarjetas suman al objetivo en tiempo real (13-1, 2 amarillas, 1 azul, 1 roja = 23 km)', async () => {
+    renderRoute(<NewMatchPage />, { path: '/anadir/partido' });
+    await userEvent.type(await screen.findByLabelText('Goles del primer equipo'), '13');
+    await userEvent.type(screen.getByLabelText('Goles del segundo equipo'), '1');
+    const preview = screen.getByText('Previsualización').parentElement!;
+    await userEvent.click(screen.getByRole('button', { name: 'Una tarjeta amarilla más' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Una tarjeta amarilla más' }));
+    expect(within(preview).getByText('16')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Una tarjeta azul más' }));
+    const red = screen.getByLabelText('Rojas');
+    await userEvent.clear(red);
+    await userEvent.type(red, '1');
+    expect(within(preview).getByText('23')).toBeInTheDocument();
+    expect(within(preview).getByText('Tarjetas rojas').nextSibling).toHaveTextContent('5 km');
+  });
+
+  it('rechaza tarjetas negativas o vacías', async () => {
+    renderRoute(<NewMatchPage />, { path: '/anadir/partido' });
+    await userEvent.type(await screen.findByLabelText('Goles del primer equipo'), '3');
+    await userEvent.type(screen.getByLabelText('Goles del segundo equipo'), '1');
+    const yellow = screen.getByLabelText('Amarillas');
+    await userEvent.clear(yellow);
+    await userEvent.type(yellow, '-2');
+    await userEvent.clear(screen.getByLabelText('Azules'));
+    await userEvent.click(screen.getByRole('button', { name: /Revisar y guardar/ }));
+    expect(await screen.findByText('Las tarjetas no pueden ser negativas')).toBeInTheDocument();
+    expect(screen.getByText('Indica el número (0 si no hubo)')).toBeInTheDocument();
+    expect(screen.queryByText('Confirmar partido')).not.toBeInTheDocument();
   });
 
   it('un campo vacío no se interpreta como cero', async () => {
@@ -58,7 +88,7 @@ describe('registro de partido', () => {
     await userEvent.click(screen.getByRole('button', { name: /Revisar y guardar/ }));
 
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('11 km')).toBeInTheDocument();
+    expect(within(dialog).getByText('Objetivo generado').nextSibling).toHaveTextContent('11 km');
     expect(within(dialog).getByText('Marta López')).toBeInTheDocument();
     expect(within(dialog).getByText('26 oct – 1 nov')).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: /Guardar partido/ }));
@@ -70,6 +100,9 @@ describe('registro de partido', () => {
       week_start: '2026-10-26',
       home_goals: 4,
       away_goals: 7,
+      yellow_cards: 0,
+      blue_cards: 0,
+      red_cards: 0,
       home_team: null,
     });
     expect(await screen.findByText('Otra ruta')).toBeInTheDocument();

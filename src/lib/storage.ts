@@ -12,6 +12,7 @@ export const PREF_KEYS = {
   pendingInvite: 'refrun_pending_invite_v1',
   draftMatch: 'refrun_draft_match_v1',
   draftWorkout: 'refrun_draft_workout_v1',
+  notificationsPromptDismissed: 'refrun_notifications_prompt_dismissed_v1',
 } as const;
 
 export type PrefKey = (typeof PREF_KEYS)[keyof typeof PREF_KEYS];

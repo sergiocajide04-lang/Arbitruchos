@@ -11,11 +11,9 @@ import { Badge, EmptyState } from '@/components/ui/misc';
 import { buildRanking } from '@/domain/calc/ranking';
 import {
   ACTIVITY_LABELS,
-  POLICY_LABELS,
   SEASON_STATUS_LABELS,
   SOURCE_LABELS,
   type ActivityType,
-  type CompliancePolicy,
   type Season,
   type SeasonStatus,
 } from '@/domain/types';
@@ -130,9 +128,10 @@ function SeasonDetails({ season, onEdit }: { season: Season; onEdit(): void }) {
     ).map((r) => ({
       arbitro: name(r.userId),
       objetivo_km: r.summary.targetKm,
-      corridos_km: r.summary.completedKm,
-      atribuibles_km: r.summary.attributableKm,
+      validos_km: r.summary.attributableKm,
       pendientes_km: r.summary.pendingKm,
+      corridos_km: r.summary.completedKm,
+      excedente_km: r.summary.extraKm,
       cumplimiento_pct: r.summary.pct === null ? null : Math.round(r.summary.pct * 10) / 10,
       entrenamientos: r.workoutCount,
     }));
@@ -175,13 +174,10 @@ function SeasonDetails({ season, onEdit }: { season: Season; onEdit(): void }) {
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
           <div className="rounded-xl bg-surface-2/60 p-3">
             <dt className="text-xs text-muted">Metodología de cumplimiento</dt>
-            <dd className="mt-0.5 font-medium">{POLICY_LABELS[season.compliance_policy]}</dd>
+            <dd className="mt-0.5 font-medium">Compensación de deudas, sin saldo a favor</dd>
             <dd className="mt-1 text-xs text-muted">
-              {season.compliance_policy === 'season_total'
-                ? 'Los goles de cada partido se suman al objetivo de la temporada y todos los km corridos se suman al total. Cumplimiento = km hechos ÷ objetivo acumulado.'
-                : season.compliance_policy === 'weekly_independent'
-                  ? 'Cada semana se evalúa por separado. Los km de más se conservan, pero no compensan otras semanas.'
-                  : 'Los km de más en una semana compensan los déficits de semanas anteriores.'}
+              Objetivo de cada partido = goles + amarillas×1 + azules×2 + rojas×5. Los km corridos pagan primero las deudas más antiguas y después el
+              objetivo de la semana. Lo que sobra se pierde para la competición (sigue en las estadísticas) y nunca cubre semanas futuras.
             </dd>
           </div>
           <div className="rounded-xl bg-surface-2/60 p-3">
@@ -223,7 +219,6 @@ function SeasonFormDialog({ initial, onClose }: { initial: Season | null; onClos
           end_date: initial.end_date,
           timezone: initial.timezone,
           status: initial.status,
-          compliance_policy: initial.compliance_policy,
           counted_activity_types: initial.counted_activity_types,
           manual_requires_review: initial.manual_requires_review,
         }
@@ -233,14 +228,12 @@ function SeasonFormDialog({ initial, onClose }: { initial: Season | null; onClos
           end_date: '',
           timezone: group.timezone,
           status: 'active',
-          compliance_policy: 'season_total',
           counted_activity_types: ['run', 'treadmill'],
           manual_requires_review: false,
         },
   );
   const [error, setError] = useState<string | null>(null);
   const set = <K extends keyof SeasonInput>(k: K, val: SeasonInput[K]) => setV((p) => ({ ...p, [k]: val }));
-  const policyChanged = !!initial && initial.compliance_policy !== v.compliance_policy;
 
   const save = useMutation({
     mutationFn: () => (initial ? updateSeason(initial.id, v) : createSeason(group.id, v)),
@@ -301,18 +294,6 @@ function SeasonFormDialog({ initial, onClose }: { initial: Season | null; onClos
             </Select>
           </Field>
         </div>
-        <Field
-          label="Metodología de cumplimiento"
-          warning={policyChanged ? 'Cambiar la metodología recalcula los porcentajes de toda la temporada. El cambio quedará registrado.' : undefined}
-        >
-          <Select value={v.compliance_policy} onChange={(e) => set('compliance_policy', e.target.value as CompliancePolicy)}>
-            {(Object.keys(POLICY_LABELS) as CompliancePolicy[]).map((p) => (
-              <option key={p} value={p}>
-                {POLICY_LABELS[p]}
-              </option>
-            ))}
-          </Select>
-        </Field>
         <fieldset>
           <legend className="mb-2 text-sm font-medium">Actividades que computan para el objetivo</legend>
           <div className="grid grid-cols-2 gap-2">

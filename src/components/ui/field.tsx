@@ -95,6 +95,17 @@ export function Field({ label, hint, error, warning, optional, className, childr
   );
 }
 
+/** Contador de caracteres para el `trailing` de un Field (p. ej. 14/20). */
+export function CharCounter({ length, max }: { length: number; max: number }) {
+  const over = length > max;
+  return (
+    <span aria-live="polite" className={cn('num text-xs tabular-nums', over ? 'font-semibold text-danger' : 'text-muted')}>
+      {length}/{max}
+      {over && <span className="sr-only"> (supera el máximo)</span>}
+    </span>
+  );
+}
+
 export function Checkbox({
   label,
   checked,

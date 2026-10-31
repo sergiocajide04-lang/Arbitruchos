@@ -24,8 +24,8 @@ export function useMemberStats(userId: string, period: Period = 'season') {
     const ledgers = ids.map((id) => data.ledgerFor(id));
     const ledger = isGroup ? mergeLedgers(ledgers) : ledgers[0]!;
     const summary = isGroup
-      ? combineSummaries(ledgers.map((l) => summarizeSeason(l, season.compliance_policy)))
-      : summarizeSeason(ledger, season.compliance_policy);
+      ? combineSummaries(ledgers.map((l) => summarizeSeason(l)))
+      : summarizeSeason(ledger);
 
     const counted = data.workouts.filter((w) => ids.includes(w.user_id) && data.countable(w));
     const [from, to] = periodRange(period, season.start_date, season.end_date, data.currentWeek);

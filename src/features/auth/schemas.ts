@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { displayNameSchema } from '@/domain/profile';
 
 export const emailSchema = z.string().trim().min(1, 'Introduce tu correo').email('El correo no es válido');
 
@@ -21,7 +22,7 @@ export const inviteCodeSchema = z
   .refine((v) => v === '' || v.length === 10, 'El código tiene 10 caracteres (p. ej. ABCDE-12345)');
 
 export const signupSchema = z.object({
-  displayName: z.string().trim().min(2, 'Mínimo 2 caracteres').max(40, 'Máximo 40 caracteres'),
+  displayName: displayNameSchema,
   email: emailSchema,
   password: passwordSchema,
   inviteCode: inviteCodeSchema.optional(),

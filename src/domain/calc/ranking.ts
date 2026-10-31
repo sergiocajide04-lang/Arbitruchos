@@ -24,7 +24,7 @@ export type RankingSort = 'pct_desc' | 'pct_asc' | 'km_desc' | 'pending_asc';
 export const RANKING_SORT_LABELS: Record<RankingSort, string> = {
   pct_desc: 'Mayor cumplimiento',
   pct_asc: 'Menor cumplimiento',
-  km_desc: 'Más kilómetros',
+  km_desc: 'Más km corridos',
   pending_asc: 'Menos pendientes',
 };
 
@@ -43,22 +43,28 @@ export function buildRanking(
     return {
       userId,
       weeks,
-      summary: summarizeSeason(weeks, season.compliance_policy),
+      summary: summarizeSeason(weeks),
       workoutCount: counted.length,
       pace: aggregatePace(counted),
     };
   });
 }
 
-/** Las filas sin objetivo (pct null) van siempre al final con los criterios de porcentaje. */
+/**
+ * La clasificación de la competición ordena por cumplimiento (≤ 100 %). A igual
+ * porcentaje desempatan los km válidos y después los pendientes, nunca los km
+ * deportivos (los excedentes no dan ventaja). Sin objetivo (pct null): al final.
+ */
 export function sortRanking(rows: readonly RankingRow[], sort: RankingSort): RankingRow[] {
+  const tieBreak = (a: RankingRow, b: RankingRow) =>
+    b.summary.attributableKm - a.summary.attributableKm || a.summary.pendingKm - b.summary.pendingKm;
   const byPct = (dir: 1 | -1) => (a: RankingRow, b: RankingRow) => {
     const pa = a.summary.pct;
     const pb = b.summary.pct;
-    if (pa === null && pb === null) return b.summary.completedKm - a.summary.completedKm;
+    if (pa === null && pb === null) return 0;
     if (pa === null) return 1;
     if (pb === null) return -1;
-    return dir * (pa - pb) || b.summary.completedKm - a.summary.completedKm;
+    return dir * (pa - pb) || tieBreak(a, b);
   };
   const copy = [...rows];
   switch (sort) {

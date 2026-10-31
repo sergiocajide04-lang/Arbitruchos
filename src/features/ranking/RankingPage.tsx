@@ -5,9 +5,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/card';
 import { Select } from '@/components/ui/field';
 import { Avatar, EmptyState, ErrorBlock, LoadingBlock, ProgressBar, Segmented } from '@/components/ui/misc';
-import { combineSummaries, pendingKm, weekOf, weekPct } from '@/domain/calc/compliance';
+import { combineSummaries, effectiveWeek, weekOf } from '@/domain/calc/compliance';
 import { RANKING_SORT_LABELS, sortRanking, type RankingRow, type RankingSort } from '@/domain/calc/ranking';
-import { POLICY_LABELS } from '@/domain/types';
 import { useUser } from '@/features/auth/AuthProvider';
 import { useActiveGroup } from '@/features/group/GroupProvider';
 import { NoSeasonState } from '@/features/seasons/NoSeasonState';
@@ -24,6 +23,7 @@ type Scope = 'season' | 'week';
 interface Display {
   userId: string;
   target: number;
+  valid: number;
   completed: number;
   pending: number;
   pct: number | null;
@@ -37,6 +37,7 @@ function fromRow(row: RankingRow, scope: Scope, currentWeek: string): Display {
     return {
       userId: row.userId,
       target: row.summary.targetKm,
+      valid: row.summary.attributableKm,
       completed: row.summary.completedKm,
       pending: row.summary.pendingKm,
       pct: row.summary.pct,
@@ -45,16 +46,19 @@ function fromRow(row: RankingRow, scope: Scope, currentWeek: string): Display {
       met: row.summary.targetKm > 0 && row.summary.pendingKm === 0,
     };
   }
+  // Semana: objetivo efectivo = deuda arrastrada + objetivo nuevo.
   const w = weekOf(row.weeks, currentWeek, currentWeek);
+  const e = effectiveWeek(w);
   return {
     userId: row.userId,
-    target: w.targetKm,
-    completed: w.completedKm,
-    pending: pendingKm(w.completedKm, w.targetKm),
-    pct: weekPct(w.completedKm, w.targetKm),
+    target: e.effectiveTargetKm,
+    valid: e.validKm,
+    completed: e.completedKm,
+    pending: e.pendingKm,
+    pct: e.pct,
     workouts: w.workoutCount,
     pace: null,
-    met: w.met,
+    met: e.effectiveTargetKm > 0 && e.pendingKm === 0,
   };
 }
 
@@ -72,7 +76,7 @@ export function RankingPage() {
         ? data.rows
         : data.rows.map((r) => {
             const d = fromRow(r, 'week', data.currentWeek);
-            return { ...r, summary: { ...r.summary, pct: d.pct, completedKm: d.completed, pendingKm: d.pending } };
+            return { ...r, summary: { ...r.summary, pct: d.pct, attributableKm: d.valid, completedKm: d.completed, pendingKm: d.pending } };
           });
     return sortRanking(adapted, sort).map((r) => fromRow(data.rows.find((o) => o.userId === r.userId)!, scope, data.currentWeek));
   }, [data.rows, data.currentWeek, scope, sort]);
@@ -89,7 +93,7 @@ export function RankingPage() {
       <PageHeader
         title="Clasificación"
         subtitle={
-          season ? (scope === 'season' ? `${season.name} · ${POLICY_LABELS[season.compliance_policy].toLowerCase()}` : `Semana ${formatWeekRange(data.currentWeek)}`) : undefined
+          season ? (scope === 'season' ? `${season.name} · cumplimiento de objetivos` : `Semana ${formatWeekRange(data.currentWeek)}`) : undefined
         }
       />
       {!season ? (
@@ -128,12 +132,15 @@ export function RankingPage() {
                 <p className="eyebrow">Entre todos</p>
                 <div className="mt-1 flex items-end justify-between gap-3">
                   <p className="num text-3xl font-bold leading-none">
-                    {formatKm(groupTotal.completedKm)}
-                    <span className="ml-1 text-base text-muted">de {formatKm(groupTotal.targetKm)} km</span>
+                    {formatKm(groupTotal.attributableKm)}
+                    <span className="ml-1 text-base text-muted">válidos de {formatKm(groupTotal.targetKm)} km</span>
                   </p>
                   <p className="num text-3xl font-bold leading-none text-accent-text">{formatPct(groupTotal.pct)}</p>
                 </div>
-                <ProgressBar value={groupTotal.pct} className="mt-3" label="Kilómetros del grupo sobre el objetivo acumulado" />
+                <ProgressBar value={groupTotal.pct} className="mt-3" label="Cumplimiento del grupo" />
+                <p className="mt-2 text-xs text-muted">
+                  {formatKm(groupTotal.completedKm)} km corridos en total · {formatKm(groupTotal.pendingKm)} km pendientes
+                </p>
               </div>
             </div>
           )}
@@ -173,7 +180,7 @@ export function RankingPage() {
                           <p className="flex items-center gap-1 text-xs text-muted">
                             {r.met ? (
                               <>
-                                <CheckCircle2 className="size-3.5 text-accent-text" aria-hidden /> Objetivo al día
+                                <CheckCircle2 className="size-3.5 text-accent-text" aria-hidden /> Al día
                               </>
                             ) : r.target === 0 ? (
                               'Sin objetivo todavía'
@@ -185,10 +192,11 @@ export function RankingPage() {
                         <p className="num text-3xl font-bold leading-none">{formatPct(r.pct)}</p>
                       </div>
                       <ProgressBar value={r.pct} className="mt-3" label={`Cumplimiento de ${p?.display_name ?? 'miembro'}`} />
-                      <dl className="mt-3 grid grid-cols-3 gap-2 text-xs sm:grid-cols-5">
-                        <Metric label={scope === 'season' ? 'Objetivo acum.' : 'Objetivo'} value={`${formatKm(r.target)} km`} />
-                        <Metric label="Corridos" value={`${formatKm(r.completed)} km`} />
+                      <dl className="mt-3 grid grid-cols-3 gap-2 text-xs sm:grid-cols-6">
+                        <Metric label={scope === 'season' ? 'Objetivos' : 'Obj. efectivo'} value={`${formatKm(r.target)} km`} />
+                        <Metric label="Válidos" value={`${formatKm(r.valid)} km`} />
                         <Metric label="Pendientes" value={`${formatKm(r.pending)} km`} />
+                        <Metric label="Corridos" value={`${formatKm(r.completed)} km`} />
                         <Metric label="Entrenos" value={String(r.workouts)} />
                         {scope === 'season' && <Metric label="Ritmo medio" value={r.pace ? `${formatPace(r.pace)} /km` : '—'} />}
                       </dl>
@@ -199,13 +207,8 @@ export function RankingPage() {
             </ol>
           )}
           <p className="text-xs leading-relaxed text-muted">
-            {season.compliance_policy === 'season_total'
-              ? 'Los objetivos y los kilómetros se suman durante toda la temporada: cumplimiento = km hechos ÷ objetivo acumulado (suma de los goles de todos los partidos registrados). Todo lo que corres cuenta, también lo que va por delante.'
-              : `El porcentaje de temporada es km atribuibles ÷ objetivos de las semanas ya iniciadas (no la media de porcentajes). ${
-                  season.compliance_policy === 'weekly_independent'
-                    ? 'Los km de más se muestran, pero no compensan otras semanas.'
-                    : 'Los km de más compensan déficits de semanas anteriores.'
-                }`}{' '}
+            Cumplimiento = km válidos ÷ objetivos de las semanas ya iniciadas (máximo 100 %). Los km de más compensan deudas de semanas
+            anteriores, pero nunca generan saldo para semanas futuras: el excedente solo cuenta en «Corridos» y en las estadísticas.{' '}
             El ritmo medio es tiempo total ÷ distancia total.
           </p>
         </div>

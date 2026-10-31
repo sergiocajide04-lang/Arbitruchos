@@ -7,7 +7,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog } from '@/components/ui/dialog';
-import { Field, Input } from '@/components/ui/field';
+import { CharCounter, Field, Input } from '@/components/ui/field';
+import { NAME_MAX, displayNameError, nameLength } from '@/domain/profile';
 import { AVATAR_COLORS, Avatar, Badge, EmptyState, ErrorBlock, LoadingBlock, ProgressBar, Stat } from '@/components/ui/misc';
 import { ROLE_LABELS, type AvatarColor, type Profile } from '@/domain/types';
 import { useAuth, useUser } from '@/features/auth/AuthProvider';
@@ -162,7 +163,8 @@ function EditProfileDialog({ profile, onClose }: { profile: Profile; onClose(): 
     },
     onError: (e) => toast.error(toUserMessage(e)),
   });
-  const invalid = name.trim().length < 1 || name.trim().length > 40;
+  const nameError = displayNameError(name);
+  const invalid = nameError !== null;
 
   return (
     <Dialog
@@ -181,8 +183,12 @@ function EditProfileDialog({ profile, onClose }: { profile: Profile; onClose(): 
       }
     >
       <div className="space-y-5">
-        <Field label="Nombre deportivo" error={invalid ? 'Entre 1 y 40 caracteres' : undefined}>
-          <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} />
+        <Field
+          label="Nombre deportivo"
+          error={nameError ?? undefined}
+          trailing={<CharCounter length={nameLength(name)} max={NAME_MAX} />}
+        >
+          <Input value={name} onChange={(e) => setName(e.target.value)} autoComplete="nickname" />
         </Field>
         <fieldset>
           <legend className="mb-2 text-sm font-medium">Color del avatar</legend>

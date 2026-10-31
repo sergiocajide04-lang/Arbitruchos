@@ -5,7 +5,8 @@ import { useForm } from 'react-hook-form';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
-import { Field, Input } from '@/components/ui/field';
+import { CharCounter, Field, Input } from '@/components/ui/field';
+import { NAME_MAX, nameLength } from '@/domain/profile';
 import { toUserMessage } from '@/lib/errors';
 import { PREF_KEYS, writePref } from '@/lib/storage';
 import { sendPasswordReset, signIn, signUp, updatePassword } from '@/services/api';
@@ -105,6 +106,7 @@ export function SignupPage() {
     defaultValues: { displayName: '', email: '', password: '', inviteCode: formatInviteCode(params.get('codigo') ?? '') },
   });
   const { errors, isSubmitting } = form.formState;
+  const displayName = form.watch('displayName') ?? '';
 
   if (status === 'signed_in') return <Navigate to="/" replace />;
 
@@ -141,8 +143,13 @@ export function SignupPage() {
     <AuthLayout title="Crear cuenta" subtitle="Solo podrás ver los datos de un grupo cuando te unas con una invitación.">
       <form onSubmit={onSubmit} noValidate className="space-y-4">
         {error && <FormAlert>{error}</FormAlert>}
-        <Field label="Nombre deportivo" hint="Así te verán en la clasificación." error={errors.displayName?.message}>
-          <Input autoComplete="nickname" maxLength={40} {...form.register('displayName')} />
+        <Field
+          label="Nombre deportivo"
+          hint="Así te verán en la clasificación."
+          error={errors.displayName?.message ?? (nameLength(displayName) > NAME_MAX ? `Máximo ${NAME_MAX} caracteres` : undefined)}
+          trailing={<CharCounter length={nameLength(displayName)} max={NAME_MAX} />}
+        >
+          <Input autoComplete="nickname" {...form.register('displayName')} />
         </Field>
         <Field label="Correo electrónico" error={errors.email?.message}>
           <Input type="email" autoComplete="email" inputMode="email" {...form.register('email')} />

@@ -19,7 +19,7 @@ const profile = (id: string, name: string, color: 'lime' | 'cyan' | 'amber' = 'l
   created_at: '2026-09-01T10:00:00Z',
 });
 
-export const group: Group = { id: 'g1', name: 'Árbitros Norte', timezone: 'Europe/Madrid', created_by: ME, created_at: '2026-09-01T10:00:00Z' };
+export const group: Group = { id: 'g1', name: 'Árbitros Norte', timezone: 'Europe/Madrid', match_reminder_days: [7, 1], match_reminder_hour: 20, created_by: ME, created_at: '2026-09-01T10:00:00Z' };
 
 export const season: Season = {
   id: 's1',
@@ -29,7 +29,7 @@ export const season: Season = {
   end_date: '2027-06-30',
   timezone: 'Europe/Madrid',
   status: 'active',
-  compliance_policy: 'season_total',
+  compliance_policy: 'carry_forward',
   counted_activity_types: ['run', 'treadmill'],
   manual_requires_review: false,
   created_by: ME,

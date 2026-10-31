@@ -32,6 +32,10 @@ const workouts: Workout[] = [];
 for (const r of refs) {
   weeks.forEach((w, i) => {
     const [h, a] = scores[r]![i]!;
+    // Tarjetas sintéticas (vista previa): 0-3 amarillas, alguna azul y alguna roja.
+    const y = (i + h) % 4;
+    const b = (i + a) % 3 === 0 ? 1 : 0;
+    const red = i === 4 && h > 5 ? 1 : 0;
     matches.push({
       id: `m-${r}-${i}`,
       group_id: 'g1',
@@ -44,7 +48,10 @@ for (const r of refs) {
       away_team: null,
       home_goals: h,
       away_goals: a,
-      target_km: h + a,
+      yellow_cards: y,
+      blue_cards: b,
+      red_cards: red,
+      target_km: h + a + y + 2 * b + 5 * red,
       notes: null,
       change_reason: null,
       created_by: r,
@@ -123,3 +130,13 @@ export const createSeason = noop;
 export const updateSeason = noop;
 export const acceptInvitation = noop;
 export const createGroup = noop;
+
+// Notificaciones (vista previa: sin dispositivos ni envíos reales).
+export const DEFAULT_NOTIFICATION_SETTINGS = { enabled: true, match_reminders: true, km_reminders: true, km_days: [2, 5], remind_hour: 19 };
+export const getNotificationSettings = async (userId: string) => delay({ user_id: userId, ...DEFAULT_NOTIFICATION_SETTINGS });
+export const saveNotificationSettings = noop;
+export const listMyDevices = async () => delay([]);
+export const listMyNotifications = async () => delay([]);
+export const registerPushSubscription = noop;
+export const deletePushSubscription = noop;
+export const deletePushDevice = noop;

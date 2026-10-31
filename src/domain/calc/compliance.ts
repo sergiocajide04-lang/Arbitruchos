@@ -1,28 +1,31 @@
 /**
  * Cálculo de objetivos, kilómetros y cumplimiento. ÚNICA fuente de estas
- * fórmulas en la aplicación: todas las pantallas usan estas funciones.
+ * fórmulas: todas las pantallas y el envío de notificaciones usan estas funciones.
  *
- * Definiciones (por árbitro y semana ISO lunes-domingo):
- *   objetivo_semana    = Σ target_km de sus partidos asignados a esa semana
- *   completados_semana = Σ distance_km de sus entrenamientos COMPUTABLES de esa semana
- *   pendientes_semana  = max(0, objetivo − completados)
- *   %_semana           = completados / objetivo × 100   (sin tope; null si objetivo = 0)
+ * METODOLOGÍA: compensación de deudas sin saldo a favor.
  *
- * Temporada:
- *   - season_total (POR DEFECTO, "acumulado"): todos los objetivos y todos los km
- *     se suman a lo largo de la temporada, semana tras semana.
- *       objetivo_acumulado = Σ objetivos de TODOS los partidos registrados
- *       pendientes         = max(0, objetivo_acumulado − km_corridos)
- *       %_temporada        = km_corridos / objetivo_acumulado × 100 (sin tope)
- *   Políticas alternativas (solo semanas cuyo lunes es ≤ la semana actual):
- *   %_temporada = 100 × km_atribuibles / Σ objetivos
- *   - weekly_independent: km_atribuibles = Σ min(completados, objetivo) por semana.
- *     El exceso de una semana NO compensa otras, pero los km se conservan y se muestran.
- *   - carry_forward: además, el exceso de una semana compensa el déficit acumulado
- *     de semanas ANTERIORES de la misma temporada (nunca de semanas futuras).
+ *   - Cada partido genera una OBLIGACIÓN de target_km en su semana de cumplimiento
+ *     (semana ISO lunes-domingo). Las obligaciones de una misma semana se suman.
+ *   - Los km de los entrenamientos COMPUTABLES de una semana se asignan, en orden
+ *     cronológico, a las obligaciones pendientes MÁS ANTIGUAS cuya semana ya ha
+ *     empezado (semana ≤ semana del entrenamiento).
+ *   - Lo que sobra cuando no queda ninguna obligación pendiente es EXCEDENTE: se
+ *     pierde para la competición. Nunca se guarda como saldo para semanas futuras.
+ *   - Las semanas futuras (aún no iniciadas) no reciben km ni cuentan como deuda.
+ *
+ * Para cada árbitro:
+ *   km_deportivos    = Σ km computables (estadísticas: siempre la distancia real)
+ *   km_validos       = parte de esos km asignada a obligaciones
+ *   km_excedentes    = km_deportivos − km_validos
+ *   km_pendientes    = Σ obligaciones iniciadas − km_validos
+ *   %_cumplimiento   = km_validos / Σ obligaciones iniciadas × 100   (≤ 100 %)
+ *
+ * El resultado no depende del orden de los entrenamientos dentro de una semana,
+ * así que la asignación por semanas es determinista y reproducible. Editar o
+ * borrar cualquier partido o entrenamiento recalcula todo desde los datos brutos.
  */
 import { compareIso, isWithin, type IsoDate } from '@/lib/dates';
-import type { ActivityType, CompliancePolicy, ValidationStatus } from '@/domain/types';
+import type { ActivityType, ValidationStatus } from '@/domain/types';
 
 export interface MatchLike {
   referee_id: string;
@@ -44,7 +47,6 @@ export interface WorkoutLike {
 export interface SeasonRules {
   start_date: IsoDate;
   end_date: IsoDate;
-  compliance_policy: CompliancePolicy;
   counted_activity_types: ActivityType[];
 }
 
@@ -53,10 +55,23 @@ export type WeekPhase = 'past' | 'current' | 'upcoming';
 export interface WeekLedger {
   weekStart: IsoDate;
   phase: WeekPhase;
+  /** Objetivo nuevo de la semana (partidos asignados a ella). */
   targetKm: number;
+  /** Km deportivos corridos esa semana. */
   completedKm: number;
+  /** Deuda de semanas anteriores al empezar la semana. */
+  carriedInKm: number;
+  /** Km de esta semana que se han asignado a alguna obligación (deuda o propia). */
+  validKm: number;
+  /** Km de esta semana que no se han podido asignar (se pierden para la competición). */
+  excessKm: number;
+  /** Parte del objetivo de ESTA semana cubierta, con km de esta semana o posteriores. */
+  coveredKm: number;
+  /** Lo que queda hoy del objetivo de esta semana. */
   pendingKm: number;
-  /** completados/objetivo×100 sin tope; null si no hay objetivo. */
+  /** Deuda total pendiente al terminar la semana (incluye semanas anteriores). */
+  outstandingKm: number;
+  /** coveredKm / targetKm × 100 (≤ 100); null si la semana no tiene objetivo. */
   pct: number | null;
   met: boolean;
   workoutCount: number;
@@ -64,15 +79,16 @@ export interface WeekLedger {
 }
 
 export interface SeasonSummary {
-  /** Σ objetivos de semanas ya iniciadas. */
+  /** Σ obligaciones de semanas ya iniciadas. */
   targetKm: number;
-  /** Km computables realmente corridos en la temporada (incluye excesos). */
+  /** Km deportivos computables corridos en la temporada (todos). */
   completedKm: number;
-  /** Km que cuentan para el porcentaje según la política. */
+  /** Km válidos para la competición (asignados a obligaciones). */
   attributableKm: number;
   pendingKm: number;
-  /** Km por encima de lo atribuible (excesos que no compensan). */
+  /** Km excedentes: no cuentan para la competición ni generan crédito. */
   extraKm: number;
+  /** Cumplimiento ≤ 100 %; null si aún no hay obligaciones. */
   pct: number | null;
   /** Objetivos ya asignados a semanas futuras (no cuentan todavía). */
   upcomingTargetKm: number;
@@ -80,9 +96,22 @@ export interface SeasonSummary {
   weeksMet: number;
 }
 
-export const round3 = (n: number) => Math.round(n * 1000) / 1000;
+/** Vista de una semana como «objetivo efectivo» (deuda arrastrada + objetivo nuevo). */
+export interface EffectiveWeek {
+  carriedInKm: number;
+  targetKm: number;
+  effectiveTargetKm: number;
+  completedKm: number;
+  validKm: number;
+  excessKm: number;
+  pendingKm: number;
+  pct: number | null;
+}
 
-/** ¿Cuenta este entrenamiento para el objetivo de la temporada? */
+export const round3 = (n: number) => Math.round(n * 1000) / 1000;
+const EPS = 1e-9;
+
+/** ¿Cuenta este entrenamiento para la temporada? */
 export function isCountable(w: WorkoutLike, season: SeasonRules): boolean {
   return (
     w.validation_status === 'confirmed' &&
@@ -91,13 +120,10 @@ export function isCountable(w: WorkoutLike, season: SeasonRules): boolean {
   );
 }
 
-export function weekPct(completedKm: number, targetKm: number): number | null {
-  if (targetKm <= 0) return null;
-  return (completedKm / targetKm) * 100;
-}
-
-export function pendingKm(completedKm: number, targetKm: number): number {
-  return round3(Math.max(0, targetKm - completedKm));
+/** Porcentaje acotado a [0, 100]; null si no hay objetivo. */
+export function cappedPct(valid: number, target: number): number | null {
+  if (target <= 0) return null;
+  return Math.min(100, Math.max(0, (valid / target) * 100));
 }
 
 function phaseOf(weekStart: IsoDate, currentWeek: IsoDate): WeekPhase {
@@ -106,8 +132,8 @@ function phaseOf(weekStart: IsoDate, currentWeek: IsoDate): WeekPhase {
 }
 
 /**
- * Libro semanal de un usuario: una fila por cada semana con objetivo o con
- * entrenamientos computables, ordenadas cronológicamente.
+ * Libro semanal de un usuario con la asignación de km a obligaciones.
+ * Una fila por cada semana con objetivo o con entrenamientos computables.
  */
 export function buildWeeklyLedger(
   userId: string,
@@ -125,7 +151,6 @@ export function buildWeeklyLedger(
     }
     return s;
   };
-
   for (const m of matches) {
     if (m.referee_id !== userId) continue;
     const s = slot(m.week_start);
@@ -139,101 +164,130 @@ export function buildWeeklyLedger(
     s.workouts += 1;
   }
 
-  return [...weeks.entries()]
-    .sort(([a], [b]) => compareIso(a, b))
-    .map(([weekStart, s]) => {
-      const completedKm = round3(s.km);
-      return {
-        weekStart,
-        phase: phaseOf(weekStart, currentWeek),
-        targetKm: s.target,
-        completedKm,
-        pendingKm: pendingKm(completedKm, s.target),
-        pct: weekPct(completedKm, s.target),
-        met: s.target > 0 && completedKm >= s.target,
-        workoutCount: s.workouts,
-        matchCount: s.matches,
-      };
-    });
-}
+  const ordered = [...weeks.entries()].sort(([a], [b]) => compareIso(a, b));
+  const rows = ordered.map(([weekStart, s]) => ({
+    weekStart,
+    phase: phaseOf(weekStart, currentWeek),
+    target: s.target,
+    km: s.km,
+    workouts: s.workouts,
+    matches: s.matches,
+    carriedIn: 0,
+    valid: 0,
+    covered: 0,
+    outstanding: 0,
+  }));
 
-/** Km atribuibles a objetivos según la política de compensación. */
-export function attributableKm(
-  weeks: ReadonlyArray<Pick<WeekLedger, 'targetKm' | 'completedKm'>>,
-  policy: CompliancePolicy,
-): number {
-  let attributable = 0;
-  let deficit = 0;
-  for (const w of weeks) {
-    const base = Math.min(w.completedKm, w.targetKm);
-    attributable += base;
-    if (policy === 'carry_forward') {
-      deficit += w.targetKm - base;
-      const excess = w.completedKm - base;
-      const recovered = Math.min(excess, deficit);
-      attributable += recovered;
-      deficit -= recovered;
+  // Cola FIFO de obligaciones abiertas (índices de filas con objetivo sin cubrir).
+  const open: number[] = [];
+  let debt = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
+    if (row.phase === 'upcoming') continue; // aún no exigible y sin entrenamientos posibles
+    row.carriedIn = debt;
+    if (row.target > 0) {
+      open.push(i);
+      debt += row.target;
     }
+    let km = row.km;
+    while (km > EPS && open.length > 0) {
+      const ob = rows[open[0]!]!;
+      const take = Math.min(km, ob.target - ob.covered);
+      ob.covered += take;
+      row.valid += take;
+      debt -= take;
+      km -= take;
+      if (ob.target - ob.covered <= EPS) open.shift();
+    }
+    row.outstanding = Math.max(0, debt);
   }
-  return round3(attributable);
+
+  return rows.map((r) => {
+    const covered = round3(r.covered);
+    const completedKm = round3(r.km);
+    const validKm = round3(r.valid);
+    return {
+      weekStart: r.weekStart,
+      phase: r.phase,
+      targetKm: r.target,
+      completedKm,
+      carriedInKm: round3(r.carriedIn),
+      validKm,
+      excessKm: round3(Math.max(0, completedKm - validKm)),
+      coveredKm: covered,
+      pendingKm: round3(Math.max(0, r.target - covered)),
+      outstandingKm: round3(r.outstanding),
+      pct: cappedPct(covered, r.target),
+      met: r.target > 0 && r.target - covered <= EPS,
+      workoutCount: r.workouts,
+      matchCount: r.matches,
+    };
+  });
 }
 
-export function summarizeSeason(weeks: readonly WeekLedger[], policy: CompliancePolicy): SeasonSummary {
-  if (policy === 'season_total') {
-    // Acumulado: cuentan todos los partidos registrados y todos los km corridos.
-    const targetKm = weeks.reduce((acc, w) => acc + w.targetKm, 0);
-    const completedKm = round3(weeks.reduce((acc, w) => acc + w.completedKm, 0));
-    const withTarget = weeks.filter((w) => w.targetKm > 0 && w.phase !== 'upcoming');
-    return {
-      targetKm,
-      completedKm,
-      attributableKm: completedKm,
-      pendingKm: round3(Math.max(0, targetKm - completedKm)),
-      extraKm: round3(Math.max(0, completedKm - targetKm)),
-      pct: targetKm > 0 ? (completedKm / targetKm) * 100 : null,
-      upcomingTargetKm: weeks.filter((w) => w.phase === 'upcoming').reduce((acc, w) => acc + w.targetKm, 0),
-      weeksWithTarget: withTarget.length,
-      weeksMet: withTarget.filter((w) => w.met).length,
-    };
-  }
+export function summarizeSeason(weeks: readonly WeekLedger[]): SeasonSummary {
   const started = weeks.filter((w) => w.phase !== 'upcoming');
   const targetKm = started.reduce((acc, w) => acc + w.targetKm, 0);
   const completedKm = round3(started.reduce((acc, w) => acc + w.completedKm, 0));
-  const attributable = attributableKm(started, policy);
+  const valid = round3(started.reduce((acc, w) => acc + w.validKm, 0));
   const withTarget = started.filter((w) => w.targetKm > 0);
   return {
     targetKm,
     completedKm,
-    attributableKm: attributable,
-    pendingKm: round3(Math.max(0, targetKm - attributable)),
-    extraKm: round3(Math.max(0, completedKm - attributable)),
-    pct: targetKm > 0 ? (attributable / targetKm) * 100 : null,
+    attributableKm: valid,
+    pendingKm: round3(Math.max(0, targetKm - valid)),
+    extraKm: round3(Math.max(0, completedKm - valid)),
+    pct: cappedPct(valid, targetKm),
     upcomingTargetKm: weeks.filter((w) => w.phase === 'upcoming').reduce((acc, w) => acc + w.targetKm, 0),
     weeksWithTarget: withTarget.length,
     weeksMet: withTarget.filter((w) => w.met).length,
   };
 }
 
-/** Semana concreta del libro (o una semana vacía si no hay registros). */
+/** Semana concreta del libro; si no hay registros, una semana vacía que arrastra la deuda viva. */
 export function weekOf(weeks: readonly WeekLedger[], weekStart: IsoDate, currentWeek: IsoDate): WeekLedger {
-  return (
-    weeks.find((w) => w.weekStart === weekStart) ?? {
-      weekStart,
-      phase: phaseOf(weekStart, currentWeek),
-      targetKm: 0,
-      completedKm: 0,
-      pendingKm: 0,
-      pct: null,
-      met: false,
-      workoutCount: 0,
-      matchCount: 0,
-    }
-  );
+  const found = weeks.find((w) => w.weekStart === weekStart);
+  if (found) return found;
+  const phase = phaseOf(weekStart, currentWeek);
+  const prev = phase === 'upcoming' ? undefined : [...weeks].reverse().find((w) => w.phase !== 'upcoming' && compareIso(w.weekStart, weekStart) < 0);
+  const debt = prev?.outstandingKm ?? 0;
+  return {
+    weekStart,
+    phase,
+    targetKm: 0,
+    completedKm: 0,
+    carriedInKm: debt,
+    validKm: 0,
+    excessKm: 0,
+    coveredKm: 0,
+    pendingKm: 0,
+    outstandingKm: debt,
+    pct: null,
+    met: false,
+    workoutCount: 0,
+    matchCount: 0,
+  };
+}
+
+/** La semana vista como deuda arrastrada + objetivo nuevo frente a lo corrido en ella. */
+export function effectiveWeek(w: WeekLedger): EffectiveWeek {
+  const effective = round3(w.carriedInKm + w.targetKm);
+  return {
+    carriedInKm: w.carriedInKm,
+    targetKm: w.targetKm,
+    effectiveTargetKm: effective,
+    completedKm: w.completedKm,
+    validKm: w.validKm,
+    excessKm: w.excessKm,
+    pendingKm: w.outstandingKm,
+    pct: cappedPct(w.validKm, effective),
+  };
 }
 
 /** Suma los libros semanales de varios árbitros (vista de todo el grupo). */
 export function mergeLedgers(ledgers: ReadonlyArray<readonly WeekLedger[]>): WeekLedger[] {
   const map = new Map<IsoDate, WeekLedger>();
+  const sumKeys = ['targetKm', 'completedKm', 'carriedInKm', 'validKm', 'excessKm', 'coveredKm', 'pendingKm', 'outstandingKm', 'workoutCount', 'matchCount'] as const;
   for (const ledger of ledgers) {
     for (const w of ledger) {
       const acc = map.get(w.weekStart);
@@ -241,23 +295,15 @@ export function mergeLedgers(ledgers: ReadonlyArray<readonly WeekLedger[]>): Wee
         map.set(w.weekStart, { ...w });
         continue;
       }
-      acc.targetKm += w.targetKm;
-      acc.completedKm = round3(acc.completedKm + w.completedKm);
-      acc.workoutCount += w.workoutCount;
-      acc.matchCount += w.matchCount;
+      for (const k of sumKeys) acc[k] = round3(acc[k] + w[k]);
     }
   }
   return [...map.values()]
     .sort((a, b) => compareIso(a.weekStart, b.weekStart))
-    .map((w) => ({
-      ...w,
-      pendingKm: pendingKm(w.completedKm, w.targetKm),
-      pct: weekPct(w.completedKm, w.targetKm),
-      met: w.targetKm > 0 && w.completedKm >= w.targetKm,
-    }));
+    .map((w) => ({ ...w, pct: cappedPct(w.coveredKm, w.targetKm), met: w.targetKm > 0 && w.pendingKm === 0 }));
 }
 
-/** Totales del grupo: suma de los resúmenes individuales (respeta la política de cada árbitro). */
+/** Totales del grupo: suma de los resúmenes individuales. */
 export function combineSummaries(summaries: readonly SeasonSummary[]): SeasonSummary {
   const sum = (k: keyof SeasonSummary) => summaries.reduce((acc, s) => acc + (s[k] as number), 0);
   const targetKm = sum('targetKm');
@@ -268,7 +314,7 @@ export function combineSummaries(summaries: readonly SeasonSummary[]): SeasonSum
     attributableKm: attributable,
     pendingKm: round3(sum('pendingKm')),
     extraKm: round3(sum('extraKm')),
-    pct: targetKm > 0 ? (attributable / targetKm) * 100 : null,
+    pct: cappedPct(attributable, targetKm),
     upcomingTargetKm: sum('upcomingTargetKm'),
     weeksWithTarget: sum('weeksWithTarget'),
     weeksMet: sum('weeksMet'),

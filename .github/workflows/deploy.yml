@@ -23,6 +23,8 @@ jobs:
       # Valores PÚBLICOS: se definen en Settings → Secrets and variables → Actions → Variables.
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      # Clave PÚBLICA VAPID (notificaciones). La privada solo está en Secrets.
+      VITE_VAPID_PUBLIC_KEY: ${{ vars.VITE_VAPID_PUBLIC_KEY }}
       # Ruta base: /<repositorio>/ en usuario.github.io/<repositorio>; "/" con dominio propio (variable PAGES_BASE).
       VITE_BASE: ${{ vars.PAGES_BASE || format('/{0}/', github.event.repository.name) }}
     steps:

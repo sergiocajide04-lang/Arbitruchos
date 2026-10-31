@@ -27,6 +27,9 @@ export interface Group {
   id: string;
   name: string;
   timezone: string;
+  /** Días ISO (1 = lunes … 7 = domingo) del recordatorio de registrar el partido. */
+  match_reminder_days: number[];
+  match_reminder_hour: number;
   created_by: string;
   created_at: string;
 }
@@ -84,6 +87,10 @@ export interface Match {
   away_team: string | null;
   home_goals: number;
   away_goals: number;
+  yellow_cards: number;
+  blue_cards: number;
+  red_cards: number;
+  /** Calculado por la base de datos: goles + amarillas×1 + azules×2 + rojas×5. */
   target_km: number;
   notes: string | null;
   change_reason: string | null;
@@ -183,8 +190,13 @@ export const SEASON_STATUS_LABELS: Record<SeasonStatus, string> = {
   closed: 'Cerrada',
 };
 
+/**
+ * Desde la migración 20261031 todas las temporadas usan 'carry_forward'
+ * (compensación de deudas sin saldo a favor). Los otros valores solo aparecen
+ * en el historial de cambios antiguo.
+ */
 export const POLICY_LABELS: Record<CompliancePolicy, string> = {
-  season_total: 'Acumulado de temporada',
-  weekly_independent: 'Semanas independientes (alternativa)',
-  carry_forward: 'Compensación de semanas anteriores (alternativa)',
+  season_total: 'Acumulado de temporada (retirada)',
+  weekly_independent: 'Semanas independientes (retirada)',
+  carry_forward: 'Compensación de deudas, sin saldo a favor',
 };

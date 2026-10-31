@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Dialog } from '@/components/ui/dialog';
 import { Field, Input, Select, Textarea } from '@/components/ui/field';
 import { Avatar, EmptyState, ErrorBlock, LoadingBlock, Segmented } from '@/components/ui/misc';
-import { parseGoals, previewTarget } from '@/domain/calc/goals';
+import { breakdown, parseCards, parseGoals, previewTarget, type CardColor } from '@/domain/calc/goals';
 import type { Match } from '@/domain/types';
 import { useUser } from '@/features/auth/AuthProvider';
 import { useActiveGroup } from '@/features/group/GroupProvider';
@@ -18,8 +18,9 @@ import { SeasonPicker } from '@/features/seasons/SeasonPicker';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { addDays, formatLongDate, formatWeekRange, weekStartOf } from '@/lib/dates';
 import { toUserMessage } from '@/lib/errors';
-import { formatKm, formatRelative } from '@/lib/format';
+import { formatRelative } from '@/lib/format';
 import { deleteMatch, listAudit, updateMatch } from '@/services/api';
+import { CardSwatch, CardsFieldset, TargetBreakdownList } from '@/features/matches/CardsFieldset';
 import { describeAudit } from './audit';
 
 const GRACE_MS = 30 * 60 * 1000;
@@ -93,7 +94,7 @@ function MatchesList() {
         <ul className="divide-y divide-border/60">
           {data.matches.map((m) => {
             const p = profileOf(m.referee_id);
-            const week = data.weekFor(m.referee_id, m.week_start);
+            const b = breakdown(m);
             return (
               <li key={m.id} className="flex flex-wrap items-center gap-3 px-4 py-3.5 sm:px-5">
                 <Avatar name={p?.display_name ?? '?'} color={p?.avatar_color} size="sm" />
@@ -114,10 +115,22 @@ function MatchesList() {
                     {formatLongDate(m.match_date)}
                     {m.competition ? ` · ${m.competition}` : ''} · semana {formatWeekRange(m.week_start)}
                   </p>
-                  <p className="mt-0.5 text-xs text-muted">
-                    Aporta <strong className="text-fg">{m.target_km} km</strong> a un objetivo semanal de {week.targetKm} km · corridos{' '}
-                    {formatKm(week.completedKm)} km
-                    {m.change_reason && <span className="text-warning"> · corregido: {m.change_reason}</span>}
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
+                    <span>
+                      Goles <strong className="text-fg">{b.goalsKm} km</strong>
+                    </span>
+                    <span className="flex items-center gap-1" aria-label={`${m.yellow_cards} amarillas, ${m.blue_cards} azules, ${m.red_cards} rojas`}>
+                      <CardSwatch color="yellow" className="h-3 w-2" />
+                      {m.yellow_cards}
+                      <CardSwatch color="blue" className="ml-1 h-3 w-2" />
+                      {m.blue_cards}
+                      <CardSwatch color="red" className="ml-1 h-3 w-2" />
+                      {m.red_cards}
+                    </span>
+                    <span>
+                      Tarjetas <strong className="text-fg">{b.cardsKm} km</strong>
+                    </span>
+                    {m.change_reason && <span className="text-warning">· corregido: {m.change_reason}</span>}
                   </p>
                 </div>
                 <span className="num text-2xl font-bold text-accent-text">
@@ -167,30 +180,37 @@ function MatchesList() {
 
 function CorrectMatchDialog({ match, onClose }: { match: Match; onClose(): void }) {
   const { isAdmin, activeMembers, profileOf } = useActiveGroup();
-  const data = useSeasonData();
   const queryClient = useQueryClient();
   const [home, setHome] = useState(String(match.home_goals));
   const [away, setAway] = useState(String(match.away_goals));
+  const [cards, setCards] = useState<Record<CardColor, string>>({
+    yellow: String(match.yellow_cards),
+    blue: String(match.blue_cards),
+    red: String(match.red_cards),
+  });
   const [week, setWeek] = useState(match.week_start);
   const [referee, setReferee] = useState(match.referee_id);
   const [reason, setReason] = useState('');
 
-  const preview = previewTarget(home, away);
+  const preview = previewTarget(home, away, cards);
   const own = weekStartOf(match.match_date);
   const weekOptions = useMemo(() => [...new Set([addDays(own, 7), own, match.week_start])], [own, match.week_start]);
-
-  // Saldo resultante de la semana tras la corrección.
-  const currentWeek = data.weekFor(referee, week);
-  const newTarget = preview ? currentWeek.targetKm - (referee === match.referee_id && week === match.week_start ? match.target_km : 0) + preview.target : null;
 
   const save = useMutation({
     mutationFn: () => {
       const h = parseGoals(home);
       const a = parseGoals(away);
+      const y = parseCards(cards.yellow);
+      const bl = parseCards(cards.blue);
+      const r = parseCards(cards.red);
       if (!h.ok || !a.ok) throw new Error('Revisa los goles');
+      if (!y.ok || !bl.ok || !r.ok) throw new Error('Revisa las tarjetas');
       return updateMatch(match.id, {
         home_goals: h.value,
         away_goals: a.value,
+        yellow_cards: y.value,
+        blue_cards: bl.value,
+        red_cards: r.value,
         week_start: week,
         referee_id: referee,
         change_reason: reason.trim(),
@@ -206,6 +226,10 @@ function CorrectMatchDialog({ match, onClose }: { match: Match; onClose(): void 
 
   const homeErr = parseGoals(home);
   const awayErr = parseGoals(away);
+  const cardErr = (c: CardColor) => {
+    const r = parseCards(cards[c]);
+    return r.ok ? undefined : r.error;
+  };
 
   return (
     <Dialog
@@ -233,6 +257,12 @@ function CorrectMatchDialog({ match, onClose }: { match: Match; onClose(): void 
             <Input inputMode="numeric" value={away} onChange={(e) => setAway(e.target.value)} className="num text-center text-2xl font-bold" />
           </Field>
         </div>
+        <CardsFieldset
+          compact
+          values={cards}
+          onChange={(c, v) => setCards((prev) => ({ ...prev, [c]: v }))}
+          errors={{ yellow: cardErr('yellow'), blue: cardErr('blue'), red: cardErr('red') }}
+        />
         <Field label="Semana de cumplimiento">
           <Select value={week} onChange={(e) => setWeek(e.target.value)}>
             {weekOptions.map((w) => (
@@ -256,14 +286,15 @@ function CorrectMatchDialog({ match, onClose }: { match: Match; onClose(): void 
         <Field label="Motivo de la corrección" hint="Obligatorio. Quedará visible para el grupo.">
           <Textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder="Acta corregida, error al teclear…" />
         </Field>
-        {preview && newTarget !== null && (
+        {preview && (
           <div aria-live="polite" className="rounded-xl border border-border bg-surface-2/60 p-3 text-sm">
-            <p>
+            <TargetBreakdownList b={preview} />
+            <p className="mt-2 border-t border-border/70 pt-2">
               Objetivo del partido: <s className="text-muted">{match.target_km} km</s> → <strong className="text-accent-text">{preview.target} km</strong>
             </p>
-            <p className="mt-1 text-muted">
-              Semana de {profileOf(referee)?.display_name ?? 'árbitro'} ({formatWeekRange(week)}): objetivo {newTarget} km · corridos{' '}
-              {formatKm(currentWeek.completedKm)} km · pendientes {formatKm(Math.max(0, newTarget - currentWeek.completedKm))} km
+            <p className="mt-1 text-xs text-muted">
+              Al guardar se recalculan las deudas y el cumplimiento de {profileOf(referee)?.display_name ?? 'este árbitro'} desde la semana{' '}
+              {formatWeekRange(week)}.
             </p>
           </div>
         )}

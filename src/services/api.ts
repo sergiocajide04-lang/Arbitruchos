@@ -8,7 +8,6 @@ import type {
   AuditEvent,
   AvatarColor,
   CaloriesKind,
-  CompliancePolicy,
   DistanceUnit,
   EntryMethod,
   Group,
@@ -93,7 +92,7 @@ export async function listMyMemberships(userId: string): Promise<Membership[]> {
   const rows = check(
     await db()
       .from('group_members')
-      .select('role, status, group:groups(id, name, timezone, created_by, created_at)')
+      .select('role, status, group:groups(id, name, timezone, match_reminder_days, match_reminder_hour, created_by, created_at)')
       .eq('user_id', userId)
       .eq('status', 'active')
       .order('joined_at'),
@@ -109,7 +108,10 @@ export async function acceptInvitation(code: string): Promise<string> {
   return check(await db().rpc('accept_invitation', { p_code: code })) as string;
 }
 
-export async function updateGroup(id: string, patch: { name?: string; timezone?: string }) {
+export async function updateGroup(
+  id: string,
+  patch: { name?: string; timezone?: string; match_reminder_days?: number[]; match_reminder_hour?: number },
+) {
   check(await db().from('groups').update(patch).eq('id', id));
 }
 
@@ -184,7 +186,6 @@ export interface SeasonInput {
   end_date: IsoDate;
   timezone: string;
   status: SeasonStatus;
-  compliance_policy: CompliancePolicy;
   counted_activity_types: ActivityType[];
   manual_requires_review: boolean;
 }
@@ -201,7 +202,7 @@ export async function updateSeason(id: string, patch: Partial<SeasonInput>): Pro
 // Partidos
 // ---------------------------------------------------------------------------
 const MATCH_COLS =
-  'id, group_id, season_id, referee_id, match_date, week_start, competition, home_team, away_team, home_goals, away_goals, target_km, notes, change_reason, created_by, created_at, updated_at';
+  'id, group_id, season_id, referee_id, match_date, week_start, competition, home_team, away_team, home_goals, away_goals, yellow_cards, blue_cards, red_cards, target_km, notes, change_reason, created_by, created_at, updated_at';
 
 export async function listMatches(seasonId: string): Promise<Match[]> {
   return check(
@@ -218,6 +219,9 @@ export interface MatchInput {
   away_team: string | null;
   home_goals: number;
   away_goals: number;
+  yellow_cards: number;
+  blue_cards: number;
+  red_cards: number;
   notes: string | null;
 }
 
@@ -352,4 +356,94 @@ export async function listAudit(groupId: string, limit = 100): Promise<AuditEven
       .order('created_at', { ascending: false })
       .limit(limit),
   ) as AuditEvent[];
+}
+
+// ---------------------------------------------------------------------------
+// Notificaciones
+// ---------------------------------------------------------------------------
+export interface NotificationSettings {
+  user_id: string;
+  enabled: boolean;
+  match_reminders: boolean;
+  km_reminders: boolean;
+  /** Dos días ISO distintos (1 = lunes … 7 = domingo). */
+  km_days: number[];
+  remind_hour: number;
+}
+
+export const DEFAULT_NOTIFICATION_SETTINGS: Omit<NotificationSettings, 'user_id'> = {
+  enabled: true,
+  match_reminders: true,
+  km_reminders: true,
+  km_days: [2, 5],
+  remind_hour: 19,
+};
+
+export async function getNotificationSettings(userId: string): Promise<NotificationSettings> {
+  const row = check(
+    await db().from('notification_settings').select('user_id, enabled, match_reminders, km_reminders, km_days, remind_hour').eq('user_id', userId).maybeSingle(),
+  ) as NotificationSettings | null;
+  return row ?? { user_id: userId, ...DEFAULT_NOTIFICATION_SETTINGS };
+}
+
+export async function saveNotificationSettings(userId: string, patch: Omit<NotificationSettings, 'user_id'>) {
+  check(await db().from('notification_settings').upsert({ user_id: userId, ...patch }, { onConflict: 'user_id' }));
+}
+
+export interface PushDevice {
+  id: string;
+  endpoint: string;
+  user_agent: string | null;
+  created_at: string;
+  last_success_at: string | null;
+  last_error: string | null;
+}
+
+export async function listMyDevices(userId: string): Promise<PushDevice[]> {
+  return check(
+    await db()
+      .from('push_subscriptions')
+      .select('id, endpoint, user_agent, created_at, last_success_at, last_error')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false }),
+  ) as PushDevice[];
+}
+
+export async function registerPushSubscription(sub: { endpoint: string; p256dh: string; auth: string; userAgent: string | null }) {
+  check(
+    await db().rpc('register_push_subscription', {
+      p_endpoint: sub.endpoint,
+      p_p256dh: sub.p256dh,
+      p_auth: sub.auth,
+      p_user_agent: sub.userAgent,
+    }),
+  );
+}
+
+export async function deletePushSubscription(endpoint: string) {
+  check(await db().from('push_subscriptions').delete().eq('endpoint', endpoint));
+}
+
+export async function deletePushDevice(id: string) {
+  check(await db().from('push_subscriptions').delete().eq('id', id));
+}
+
+export interface NotificationLogEntry {
+  id: number;
+  kind: string;
+  title: string;
+  body: string;
+  sent_at: string;
+  devices_ok: number;
+}
+
+export async function listMyNotifications(userId: string, limit = 10): Promise<NotificationLogEntry[]> {
+  return check(
+    await db()
+      .from('notification_log')
+      .select('id, kind, title, body, sent_at, devices_ok')
+      .eq('user_id', userId)
+      .order('sent_at', { ascending: false })
+      .limit(limit),
+  ) as NotificationLogEntry[];
 }

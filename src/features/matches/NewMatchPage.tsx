@@ -11,7 +11,7 @@ import { Card } from '@/components/ui/card';
 import { Dialog } from '@/components/ui/dialog';
 import { Field, Input, Select, Textarea } from '@/components/ui/field';
 import { LoadingBlock } from '@/components/ui/misc';
-import { previewTarget } from '@/domain/calc/goals';
+import { previewTarget, type CardColor } from '@/domain/calc/goals';
 import { useUser } from '@/features/auth/AuthProvider';
 import { useActiveGroup } from '@/features/group/GroupProvider';
 import { useOnline } from '@/features/pwa/useOnline';
@@ -22,6 +22,7 @@ import { addDays, defaultComplianceWeek, formatLongDate, formatWeekRange, isIsoD
 import { toUserMessage } from '@/lib/errors';
 import { PREF_KEYS } from '@/lib/storage';
 import { createMatch } from '@/services/api';
+import { CardsFieldset, TargetBreakdownList } from './CardsFieldset';
 import { matchFormSchema, toMatchInput, type MatchFormParsed, type MatchFormValues } from './form';
 
 export function NewMatchPage() {
@@ -57,17 +58,23 @@ function MatchForm() {
       awayTeam: '',
       homeGoals: '',
       awayGoals: '',
+      yellowCards: '0',
+      blueCards: '0',
+      redCards: '0',
       notes: '',
     },
   });
   const clearDraft = useFormDraft(PREF_KEYS.draftMatch, form);
   const { errors } = form.formState;
-  const [matchDate, weekStart, refereeId, homeGoals, awayGoals, homeTeam, awayTeam] = useWatch({
+  const [matchDate, weekStart, refereeId, homeGoals, awayGoals, homeTeam, awayTeam, yellowCards, blueCards, redCards] = useWatch({
     control: form.control,
-    name: ['matchDate', 'weekStart', 'refereeId', 'homeGoals', 'awayGoals', 'homeTeam', 'awayTeam'],
+    name: ['matchDate', 'weekStart', 'refereeId', 'homeGoals', 'awayGoals', 'homeTeam', 'awayTeam', 'yellowCards', 'blueCards', 'redCards'],
   });
 
-  const preview = previewTarget(homeGoals ?? '', awayGoals ?? '');
+  const cardValues = { yellow: yellowCards ?? '', blue: blueCards ?? '', red: redCards ?? '' };
+  const cardField = { yellow: 'yellowCards', blue: 'blueCards', red: 'redCards' } as const;
+  const setCard = (c: CardColor, v: string) => form.setValue(cardField[c], v, { shouldValidate: form.formState.isSubmitted, shouldDirty: true });
+  const preview = previewTarget(homeGoals ?? '', awayGoals ?? '', cardValues);
   const referee = profileOf(refereeId ?? '');
 
   // Semanas posibles: la del partido y la siguiente (por defecto, la siguiente).
@@ -103,7 +110,7 @@ function MatchForm() {
 
   return (
     <>
-      <PageHeader title="Registrar partido" subtitle="Los goles de ambos equipos se convierten en tu objetivo de kilómetros." back="/anadir" />
+      <PageHeader title="Registrar partido" subtitle="Los goles y las tarjetas del partido se convierten en tu objetivo de kilómetros." back="/anadir" />
       {closed && (
         <p role="alert" className="mb-4 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
           La temporada «{season!.name}» está cerrada y no admite nuevos partidos.
@@ -139,6 +146,12 @@ function MatchForm() {
               </Field>
             </div>
           </fieldset>
+
+          <CardsFieldset
+            values={cardValues}
+            onChange={setCard}
+            errors={{ yellow: errors.yellowCards?.message, blue: errors.blueCards?.message, red: errors.redCards?.message }}
+          />
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Fecha del partido" error={errors.matchDate?.message}>
@@ -207,15 +220,15 @@ function MatchForm() {
               <p className="eyebrow">Previsualización</p>
               {preview ? (
                 <>
-                  <p className="mt-3 text-sm text-muted">Resultado: <strong className="num text-lg text-fg">{preview.score}</strong></p>
-                  <p className="mt-1 text-sm text-muted">Objetivo generado:</p>
+                  <TargetBreakdownList b={preview} className="mt-3" />
+                  <p className="mt-3 border-t border-border/70 pt-3 text-xs font-semibold uppercase tracking-wide text-muted">Objetivo generado</p>
                   <p className="num text-6xl font-bold leading-none text-accent-text">
                     {preview.target}
                     <span className="ml-1 text-xl text-muted">km</span>
                   </p>
                 </>
               ) : (
-                <p className="mt-3 text-sm text-muted">Introduce los goles de ambos equipos para ver el objetivo.</p>
+                <p className="mt-3 text-sm text-muted">Introduce los goles de ambos equipos y las tarjetas (0 si no hubo) para ver el objetivo.</p>
               )}
               <dl className="mt-4 space-y-1.5 border-t border-border/70 pt-4 text-sm">
                 <div className="flex justify-between gap-3">
@@ -278,6 +291,8 @@ function MatchForm() {
         {pending && preview && (
           <dl className="space-y-2 text-sm">
             <Row label="Resultado" value={`${preview.score}${pending.homeTeam || pending.awayTeam ? ` (${pending.homeTeam ?? '—'} vs ${pending.awayTeam ?? '—'})` : ''}`} />
+            <Row label="Goles" value={`${preview.goalsKm} km`} />
+            <Row label="Tarjetas" value={`${pending.yellowCards ?? 0} amarillas · ${pending.blueCards ?? 0} azules · ${pending.redCards ?? 0} rojas = ${preview.cardsKm} km`} />
             <Row label="Objetivo generado" value={`${preview.target} km`} strong />
             <Row label="Árbitro" value={profileOf(pending.refereeId)?.display_name ?? '—'} />
             <Row label="Fecha del partido" value={formatLongDate(pending.matchDate)} />

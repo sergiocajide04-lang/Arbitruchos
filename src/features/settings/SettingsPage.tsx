@@ -14,6 +14,7 @@ import { useActiveGroup } from '@/features/group/GroupProvider';
 import { TIMEZONES } from '@/features/group/onboarding';
 import { isInstallPromptDismissed, resetInstallPromptPreference, useIsStandalone } from '@/features/pwa/install';
 import { InstallInstructions } from '@/features/pwa/InstallInstructions';
+import { DAY_LABELS, DAYS, HOURS, NotificationSettingsCard } from '@/features/notifications/NotificationSettingsCard';
 import { toUserMessage } from '@/lib/errors';
 import { resetAllPrefs } from '@/lib/storage';
 import { useTheme, type ThemePref } from '@/lib/theme';
@@ -99,6 +100,8 @@ export function SettingsPage() {
           </div>
         </Card>
 
+        <NotificationSettingsCard />
+
         {memberships.length > 1 && (
           <Card>
             <CardHeader title="Grupo activo" />
@@ -165,15 +168,21 @@ function GroupSettings() {
   const queryClient = useQueryClient();
   const [name, setName] = useState(group.name);
   const [tz, setTz] = useState(group.timezone);
+  const [days, setDays] = useState<number[]>(group.match_reminder_days);
+  const [hour, setHour] = useState(group.match_reminder_hour);
   const save = useMutation({
-    mutationFn: () => updateGroup(group.id, { name: name.trim(), timezone: tz }),
+    mutationFn: () => updateGroup(group.id, { name: name.trim(), timezone: tz, match_reminder_days: days, match_reminder_hour: hour }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['memberships'] });
       toast.success('Grupo actualizado.');
     },
     onError: (e) => toast.error(toUserMessage(e)),
   });
-  const dirty = name.trim() !== group.name || tz !== group.timezone;
+  const dirty =
+    name.trim() !== group.name || tz !== group.timezone || hour !== group.match_reminder_hour || days.join() !== group.match_reminder_days.join();
+  const toggleDay = (d: number) =>
+    setDays((cur) => (cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d].sort((a, b) => ((a % 7) - (b % 7)))));
+  const daysError = days.length === 0 ? 'Elige al menos un día' : days.length > 2 ? 'Como máximo dos días' : undefined;
   return (
     <Card>
       <CardHeader title="Grupo" eyebrow="Administración" />
@@ -196,7 +205,44 @@ function GroupSettings() {
             ))}
           </Select>
         </Field>
-        <Button type="submit" size="sm" disabled={!dirty || name.trim().length < 2} loading={save.isPending}>
+        <fieldset className="space-y-3 rounded-xl border border-border/70 p-3">
+          <legend className="px-1 text-sm font-medium">Recordatorio de registrar el partido</legend>
+          <p className="text-xs text-muted">
+            Se envía solo a quien aún no ha registrado el partido del último fin de semana y tiene activado este aviso. Uno o dos días por semana.
+          </p>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Días del recordatorio de partido">
+            {DAYS.map((d) => (
+              <button
+                key={d}
+                type="button"
+                aria-pressed={days.includes(d)}
+                onClick={() => toggleDay(d)}
+                className={
+                  days.includes(d)
+                    ? 'rounded-full border border-accent/60 bg-accent/15 px-3 py-1.5 text-xs font-semibold text-accent-text'
+                    : 'rounded-full border border-border px-3 py-1.5 text-xs text-muted hover:text-fg'
+                }
+              >
+                {DAY_LABELS[d]}
+              </button>
+            ))}
+          </div>
+          {daysError && (
+            <p role="alert" className="text-xs font-medium text-danger">
+              {daysError}
+            </p>
+          )}
+          <Field label="Hora" hint="Hora local de la temporada.">
+            <Select value={hour} onChange={(e) => setHour(Number(e.target.value))}>
+              {HOURS.map((h) => (
+                <option key={h} value={h}>
+                  {String(h).padStart(2, '0')}:00
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </fieldset>
+        <Button type="submit" size="sm" disabled={!dirty || name.trim().length < 2 || !!daysError} loading={save.isPending}>
           Guardar
         </Button>
       </form>

@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { parseGoals, previewTarget, targetFromScore } from './goals';
 import {
-  attributableKm,
   buildWeeklyLedger,
+  cappedPct,
   isCountable,
-  pendingKm,
   summarizeSeason,
-  weekPct,
   type MatchLike,
   type SeasonRules,
   type WorkoutLike,
@@ -26,7 +24,6 @@ import { weekStartOf } from '@/lib/dates';
 const season: SeasonRules = {
   start_date: '2026-09-01',
   end_date: '2027-06-30',
-  compliance_policy: 'weekly_independent',
   counted_activity_types: ['run', 'treadmill'],
 };
 
@@ -74,37 +71,31 @@ describe('objetivo de un partido', () => {
   });
 
   it('previsualiza resultado y objetivo', () => {
-    expect(previewTarget('13', '1')).toEqual({ score: '13-1', target: 14 });
+    expect(previewTarget('13', '1')).toMatchObject({ score: '13-1', goalsKm: 14, cardsKm: 0, target: 14 });
   });
 });
 
-describe('saldo semanal', () => {
+describe('semana (libro con asignación de km)', () => {
   it('objetivo 14 km con carreras de 5 y 4 km deja 5 km pendientes', () => {
     const matches: MatchLike[] = [{ referee_id: 'u1', week_start: W1, target_km: 14 }];
     const workouts = [workout({ activity_date: '2026-10-20', distance_km: 5 }), workout({ activity_date: '2026-10-22', distance_km: 4 })];
     const [week] = buildWeeklyLedger('u1', matches, workouts, season, W1);
-    expect(week).toMatchObject({ targetKm: 14, completedKm: 9, pendingKm: 5, met: false, workoutCount: 2 });
+    expect(week).toMatchObject({ targetKm: 14, completedKm: 9, validKm: 9, pendingKm: 5, met: false, workoutCount: 2 });
     expect(week!.pct).toBeCloseTo(64.2857, 3);
   });
 
-  it('calcula el porcentaje de cumplimiento', () => {
-    expect(weekPct(7, 14)).toBe(50);
-    expect(weekPct(14, 14)).toBe(100);
+  it('el porcentaje nunca supera el 100 % y un objetivo cero no divide por cero', () => {
+    expect(cappedPct(7, 14)).toBe(50);
+    expect(cappedPct(29, 10)).toBe(100);
+    expect(cappedPct(5, 0)).toBeNull();
+    expect(summarizeSeason([]).pct).toBeNull();
   });
 
-  it('un objetivo cero no divide por cero', () => {
-    expect(weekPct(5, 0)).toBeNull();
-    expect(pendingKm(5, 0)).toBe(0);
-    const summary = summarizeSeason([], 'weekly_independent');
-    expect(summary.pct).toBeNull();
-  });
-
-  it('conserva los kilómetros adicionales y permite superar el 100 %', () => {
+  it('los km de más se muestran como corridos, pero no como válidos', () => {
     const matches: MatchLike[] = [{ referee_id: 'u1', week_start: W1, target_km: 10 }];
     const workouts = [workout({ activity_date: '2026-10-20', distance_km: 12.5 })];
     const [week] = buildWeeklyLedger('u1', matches, workouts, season, W1);
-    expect(week).toMatchObject({ completedKm: 12.5, pendingKm: 0, met: true });
-    expect(week!.pct).toBe(125);
+    expect(week).toMatchObject({ completedKm: 12.5, validKm: 10, excessKm: 2.5, pendingKm: 0, met: true, pct: 100 });
   });
 
   it('solo cuentan entrenamientos confirmados, de tipos computables y dentro de la temporada', () => {
@@ -131,6 +122,7 @@ describe('saldo semanal', () => {
     const [week] = buildWeeklyLedger('u1', matches, workouts, season, W1);
     expect(week!.completedKm).toBe(1);
     expect(week!.met).toBe(true);
+    expect(week!.excessKm).toBe(0);
   });
 });
 
@@ -141,64 +133,34 @@ describe('cumplimiento de temporada', () => {
     { referee_id: 'u1', week_start: W3, target_km: 8 },
   ];
   const workouts = [
-    workout({ activity_date: '2026-10-20', distance_km: 6 }), // W1: 6/10
-    workout({ activity_date: '2026-10-27', distance_km: 26 }), // W2: 26/20 (+6)
+    workout({ activity_date: '2026-10-20', distance_km: 6 }), // W1: 6/10 (deuda 4)
+    workout({ activity_date: '2026-10-27', distance_km: 26 }), // W2: paga 4 de deuda + 20 + 2 de excedente
   ];
 
-  it('no es la media de porcentajes semanales sino km atribuibles / objetivos', () => {
-    const weeks = buildWeeklyLedger('u1', matches, workouts, season, W2);
-    const s = summarizeSeason(weeks, 'weekly_independent');
-    // media simple sería (60 % + 130 %) / 2 = 95 %; la fórmula correcta: (6 + 20) / 30
+  it('no es la media de porcentajes semanales sino km válidos / obligaciones', () => {
+    const s = summarizeSeason(buildWeeklyLedger('u1', matches, workouts, season, W2));
     expect(s.targetKm).toBe(30);
-    expect(s.attributableKm).toBe(26);
-    expect(s.pct).toBeCloseTo((26 / 30) * 100, 6);
-    expect(s.completedKm).toBe(32);
-    expect(s.extraKm).toBe(6);
-    expect(s.pendingKm).toBe(4);
-  });
-
-  it('las semanas futuras no cuentan todavía', () => {
-    const weeks = buildWeeklyLedger('u1', matches, workouts, season, W2);
-    const s = summarizeSeason(weeks, 'weekly_independent');
-    expect(s.upcomingTargetKm).toBe(8);
-    expect(weeks.find((w) => w.weekStart === W3)!.phase).toBe('upcoming');
-  });
-
-  it('con compensación, el exceso cubre déficits de semanas anteriores', () => {
-    const weeks = buildWeeklyLedger('u1', matches, workouts, season, W2);
-    const s = summarizeSeason(weeks, 'carry_forward');
     expect(s.attributableKm).toBe(30);
     expect(s.pct).toBe(100);
+    expect(s.completedKm).toBe(32);
     expect(s.extraKm).toBe(2);
+    expect(s.pendingKm).toBe(0);
   });
 
-  it('la compensación nunca adelanta kilómetros a semanas posteriores', () => {
-    const weeks = [
-      { targetKm: 10, completedKm: 20 },
-      { targetKm: 10, completedKm: 0 },
-    ];
-    expect(attributableKm(weeks, 'carry_forward')).toBe(10);
-    expect(attributableKm(weeks, 'weekly_independent')).toBe(10);
+  it('las semanas futuras no cuentan todavía ni reciben km', () => {
+    const weeks = buildWeeklyLedger('u1', matches, workouts, season, W2);
+    expect(summarizeSeason(weeks).upcomingTargetKm).toBe(8);
+    expect(weeks.find((w) => w.weekStart === W3)).toMatchObject({ phase: 'upcoming', coveredKm: 0, pendingKm: 8 });
   });
 
   it('editar un partido recalcula objetivos de forma coherente', () => {
-    const before = summarizeSeason(buildWeeklyLedger('u1', matches, workouts, season, W2), 'weekly_independent');
     const corrected = matches.map((m) => (m.week_start === W1 ? { ...m, target_km: 6 } : m));
-    const after = summarizeSeason(buildWeeklyLedger('u1', corrected, workouts, season, W2), 'weekly_independent');
-    expect(before.targetKm).toBe(30);
+    const after = summarizeSeason(buildWeeklyLedger('u1', corrected, workouts, season, W2));
     expect(after.targetKm).toBe(26);
     expect(after.pct).toBe(100);
-    expect(after.completedKm).toBe(before.completedKm);
-  });
-
-  it('corregir o eliminar un entrenamiento actualiza los saldos', () => {
-    const corrected = workouts.map((w) => (w.activity_date === '2026-10-20' ? { ...w, distance_km: 9 } : w));
-    const [w1] = buildWeeklyLedger('u1', matches, corrected, season, W2);
-    expect(w1!.pendingKm).toBe(1);
-    const removed = workouts.filter((w) => w.activity_date !== '2026-10-20');
-    const weeks = buildWeeklyLedger('u1', matches, removed, season, W2);
-    expect(weeks[0]).toMatchObject({ completedKm: 0, pendingKm: 10, workoutCount: 0 });
-    expect(summarizeSeason(weeks, 'weekly_independent').attributableKm).toBe(20);
+    expect(after.attributableKm).toBe(26);
+    expect(after.extraKm).toBe(6);
+    expect(after.completedKm).toBe(32);
   });
 });
 
@@ -252,6 +214,21 @@ describe('clasificación', () => {
     expect(sortRanking(rows, 'pending_asc').map((r) => r.userId)).toEqual(['c', 'b', 'a']);
     expect(rows.find((r) => r.userId === 'a')!.summary.pct).toBe(80);
     expect(rows.find((r) => r.userId === 'b')!.summary.pct).toBe(90);
+  });
+
+  it('los km excedentes no dan ventaja: a igual 100 % no gana quien corrió más', () => {
+    const matches: MatchLike[] = [
+      { referee_id: 'a', week_start: W1, target_km: 10 },
+      { referee_id: 'b', week_start: W1, target_km: 20 },
+    ];
+    const ws = [
+      workout({ user_id: 'a', activity_date: '2026-10-20', distance_km: 60 }),
+      workout({ user_id: 'b', activity_date: '2026-10-20', distance_km: 20 }),
+    ];
+    const rows = buildRanking(['a', 'b'], matches, ws, season, W1);
+    for (const r of rows) expect(r.summary.pct).toBe(100);
+    // Desempate por km VÁLIDOS (20 > 10), no por km corridos (60 > 20).
+    expect(sortRanking(rows, 'pct_desc').map((r) => r.userId)).toEqual(['b', 'a']);
   });
 });
 

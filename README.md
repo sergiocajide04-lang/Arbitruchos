@@ -34,6 +34,7 @@ cumplimiento, y muestra clasificación y estadísticas de toda la temporada.
 16. [Arquitectura y estructura](#16-arquitectura-y-estructura)
 17. [Seguridad y privacidad](#17-seguridad-y-privacidad)
 18. [OCR: funcionamiento y límites](#18-ocr-funcionamiento-y-límites)
+19. [Notificaciones push](#19-notificaciones-push)
 
 ---
 
@@ -104,6 +105,15 @@ Las migraciones están en `supabase/migrations/` y deben aplicarse **en orden**:
 1. `20261025120000_schema.sql` – tablas, tipos y restricciones.
 2. `20261025120100_logic.sql` – funciones, triggers de integridad, auditoría y RPC.
 3. `20261025120200_security.sql` – privilegios, RLS y Realtime.
+4. `20261031120000_cards_names_compliance.sql` – tarjetas en los partidos, nombres de máximo
+   20 caracteres y metodología definitiva de compensación. No borra datos: los partidos antiguos
+   quedan con 0 tarjetas y los nombres largos existentes se conservan (solo se exige el límite al
+   crear o editar).
+5. `20261031120100_notifications.sql` – preferencias, dispositivos y registro de notificaciones.
+
+> **Orden al actualizar una instalación existente:** ejecuta primero las migraciones nuevas en
+> Supabase y **después** publica la nueva versión de la web. Al revés, la web pediría columnas
+> (tarjetas) que aún no existen.
 
 **Opción A – Editor SQL (la más sencilla):** en el panel de Supabase abre *SQL Editor*,
 pega el contenido de cada archivo y ejecútalo, uno tras otro.
@@ -153,7 +163,7 @@ No hay usuarios ni contraseñas predeterminados. El primer administrador se crea
 ## 8. Pruebas
 
 ```bash
-npm test          # 140 pruebas: cálculo, OCR (análisis), formularios, interfaz y seguridad RLS
+npm test          # 206 pruebas: cálculo, compensación, tarjetas, notificaciones, OCR (análisis), formularios, interfaz y seguridad RLS
 npm run test:ocr  # 3 pruebas de OCR real con Tesseract.js sobre capturas sintéticas
 ```
 
@@ -270,27 +280,30 @@ Los límites cambian con el tiempo; consulta siempre las páginas oficiales de p
 
 Implementadas una sola vez en `src/domain/calc/` y cubiertas por pruebas.
 
-- **Objetivo de un partido:** `goles_equipo_1 + goles_equipo_2` (13-1 → 14 km; 25-0 → 25 km;
-  4-7 → 11 km). Goles enteros 0-99; un campo vacío nunca cuenta como 0.
+- **Objetivo de un partido:** `goles A + goles B + amarillas × 1 + azules × 2 + rojas × 5`.
+  Ejemplo: 13-1 con 2 amarillas, 1 azul y 1 roja = 14 + 2 + 2 + 5 = **23 km**. Goles enteros 0-99 y
+  tarjetas enteras 0-50; un campo vacío nunca cuenta como 0. La base de datos calcula el objetivo
+  (columna generada `target_km`), así que no se puede falsear desde el navegador.
 - **Semana:** lunes a domingo en la zona horaria de la temporada. Por defecto un partido genera
   el objetivo de la **semana siguiente** (sábado 24 → semana del 26 al 1); se puede elegir la del
   propio partido. Un árbitro no puede tener dos partidos en la misma semana de una temporada.
 - **Kilómetros computables:** entrenamientos *confirmados*, de los tipos que la temporada declara
   computables y con fecha dentro de la temporada.
-- **Temporada acumulada (metodología por defecto):** los objetivos y los kilómetros se **suman
-  semana tras semana durante toda la temporada**.
-  - Objetivo acumulado = suma de los goles de **todos** los partidos registrados.
-  - Km hechos = suma de todos los entrenamientos computables (los km de más de una semana cuentan
-    para el total).
-  - Pendientes = max(0, objetivo acumulado − km hechos).
-  - Cumplimiento = km hechos ÷ objetivo acumulado × 100 (puede superar el 100 %).
-  - Totales del grupo = suma de los de cada árbitro. Se ven en Inicio, Clasificación y
-    Estadísticas → «Todo el grupo», junto con km y ritmo medio por mes.
-- **Vista semanal (informativa):** km de la semana frente al partido asignado a esa semana.
-- **Metodologías alternativas** (las elige un administrador en Temporada; el cambio queda
-  registrado): *semanas independientes* (cada semana por separado, el exceso no compensa) y
-  *compensación* (el exceso cubre déficits de semanas anteriores). En ambas solo cuentan las
-  semanas ya iniciadas y nunca se usa la media de porcentajes semanales.
+- **Compensación de deudas sin saldo a favor (metodología única):**
+  1. Cada partido crea una **obligación** en su semana de cumplimiento.
+  2. Los km de cada semana se asignan a las obligaciones pendientes **más antiguas** cuya semana ya
+     ha empezado (primero las deudas, después el objetivo de la semana).
+  3. Lo que sobra cuando no queda nada pendiente es **excedente**: se pierde para la competición y
+     **nunca** cubre objetivos futuros. Un entreno no puede pagar un objetivo de una semana posterior.
+  - **Km corridos** (deportivos) = todos los km computables. Son los que usan las estadísticas.
+  - **Km válidos** = parte asignada a obligaciones. **Excedente** = corridos − válidos.
+  - **Pendientes** = obligaciones de semanas iniciadas − válidos (incluye la deuda arrastrada).
+  - **Cumplimiento** = válidos ÷ obligaciones de semanas iniciadas × 100, **máximo 100 %**. La
+    clasificación ordena por cumplimiento (desempate: km válidos), nunca por km corridos.
+  - **Semana efectiva** (tarjeta «Esta semana»): deuda arrastrada + objetivo nuevo frente a los km
+    válidos corridos esa semana. Ej.: deuda 4 + objetivo 10 = 14; corre 12 → 85,7 %, faltan 2.
+  - No se guarda ningún saldo: todo se recalcula desde partidos y entrenamientos, así que editar
+    o borrar cualquiera de ellos actualiza los resultados sin duplicar km.
 - **Ritmo medio:** tiempo total ÷ distancia total de entrenamientos con duración (nunca la media
   de ritmos). **Mejor ritmo:** actividad de al menos 1 km.
 - Los porcentajes se muestran redondeados hacia abajo (99,7 % → 99 %) para no anunciar un objetivo
@@ -348,3 +361,41 @@ los no encontrados quedan vacíos. Distingue calorías activas y totales.
 **Límites:** no es infalible. Puede fallar con fotos inclinadas o con reflejos, pantallas LCD de
 siete segmentos, fuentes muy estilizadas, textos muy pequeños, o diseños de apps no previstos.
 Siempre se pide revisión y confirmación, y existe el registro manual.
+
+## 19. Notificaciones push
+
+Recordatorios reales (Web Push con VAPID) aunque la app esté cerrada, sin servicios de pago.
+
+**Qué se envía**
+- *Registrar el partido*: en los días y la hora que fija el administrador (Ajustes → Grupo; por
+  defecto domingo y lunes a las 20:00), solo a quien aún no tiene partido con fecha en la semana
+  del último fin de semana.
+- *Kilómetros pendientes*: en los dos días y la hora que elige cada usuario (por defecto martes y
+  viernes a las 19:00), solo si tiene deuda real: «REFRUN: Te quedan 6,5 km…».
+- *Felicitación*: una única vez cuando la deuda llega a 0 después de un recordatorio.
+- Nunca entre las 23:00 y las 07:59 (hora de la temporada). Cada aviso se registra en
+  `notification_log` con una clave única (usuario, tipo, periodo): no hay duplicados.
+
+**Cómo funciona**
+- El navegador solo pide permiso cuando el usuario pulsa *Activar notificaciones* (Inicio o
+  Ajustes → Notificaciones). Si lo deniega, no se insiste. En iPhone/iPad hace falta iOS 16.4+ y
+  abrir REFRUN desde el icono de la pantalla de inicio.
+- Cada dispositivo se guarda en `push_subscriptions` (RLS: cada usuario solo ve los suyos).
+- `.github/workflows/notifications.yml` se ejecuta cada hora, lee los datos **actuales** de
+  Supabase, calcula los km pendientes con el mismo código que la app (`src/domain/calc`) y envía.
+  Las suscripciones caducadas (404/410) se eliminan.
+
+**Configuración (una vez)**
+1. Genera las claves VAPID: `npm run vapid:keys`.
+2. GitHub → *Settings → Secrets and variables → Actions*:
+   - Variable `VITE_VAPID_PUBLIC_KEY` = clave pública.
+   - Secret `VAPID_PRIVATE_KEY` = clave privada.
+   - Secret `VAPID_SUBJECT` = `mailto:tu-correo`.
+   - Secret `SUPABASE_SECRET_KEY` = Supabase → *Project Settings → API Keys → Secret key*
+     (`sb_secret_...`).
+3. Vuelve a publicar la web (para que incluya la clave pública).
+4. Prueba: *Actions → Notificaciones push → Run workflow* con «Solo mostrar» marcado.
+
+Las claves privadas solo existen en los Secrets de GitHub; `npm run check:secrets` comprueba que no
+acaban en la web. Coste: los minutos de Actions son gratuitos en repositorios públicos.
+

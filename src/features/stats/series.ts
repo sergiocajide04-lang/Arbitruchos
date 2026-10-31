@@ -7,7 +7,7 @@ export interface WeekPoint {
   weekStart: IsoDate;
   km: number;
   target: number;
-  /** null si la semana no tiene objetivo. */
+  /** Parte cubierta del objetivo de la semana (≤ 100 %); null si no tiene objetivo. */
   pct: number | null;
   /** s/km; null si no hay entrenos con duración. */
   pace: number | null;
@@ -38,7 +38,7 @@ export function weeklySeries(
       weekStart,
       km,
       target,
-      pct: target > 0 ? (km / target) * 100 : null,
+      pct: l?.pct ?? null,
       pace: aggregatePace(countedWorkouts.filter((w) => w.week_start === weekStart)),
       cumKm: Math.round(cumKm * 1000) / 1000,
       cumTarget,

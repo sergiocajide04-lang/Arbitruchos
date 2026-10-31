@@ -16,7 +16,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Avatar, Badge, EmptyState, ErrorBlock, LoadingBlock, ProgressBar, StatusBadge } from '@/components/ui/misc';
-import { combineSummaries, summarizeSeason, type SeasonSummary, type WeekLedger } from '@/domain/calc/compliance';
+import { combineSummaries, effectiveWeek, summarizeSeason, type SeasonSummary, type WeekLedger } from '@/domain/calc/compliance';
 import { sortRanking } from '@/domain/calc/ranking';
 import { ACTIVITY_LABELS, SOURCE_LABELS } from '@/domain/types';
 import { useAuth, useUser } from '@/features/auth/AuthProvider';
@@ -27,6 +27,7 @@ import { toUserMessage } from '@/lib/errors';
 import { formatKm, formatPct, formatRelative } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { NoSeasonState } from '@/features/seasons/NoSeasonState';
+import { NotificationPromptCard } from '@/features/notifications/NotificationPromptCard';
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -88,11 +89,10 @@ function DashboardContent({
   const ledger = data.ledgerFor(userId);
   const week = data.weekFor(userId);
   const nextWeek = data.weekFor(userId, addDays(data.currentWeek, 7));
-  const summary = summarizeSeason(ledger, season.compliance_policy);
+  const summary = summarizeSeason(ledger);
   const weekNo = seasonWeekIndex(season.start_date, data.currentWeek);
   const inSeason = data.today >= season.start_date && data.today <= season.end_date;
   const ranking = useMemo(() => sortRanking(data.rows, 'pct_desc'), [data.rows]);
-  const accumulated = season.compliance_policy === 'season_total';
   const groupTotal = useMemo(() => combineSummaries(data.rows.map((r) => r.summary)), [data.rows]);
 
   const recent = useMemo(() => {
@@ -158,135 +158,19 @@ function DashboardContent({
   return (
     <>
       {/* ---------- Tarjeta principal ---------- */}
-      {accumulated ? (
-        <SeasonHero
-          summary={summary}
-          seasonName={season.name}
-          nextWeekTarget={nextWeek.targetKm}
-          nextWeekStart={nextWeek.weekStart}
-          workouts={ledger.reduce((a, w) => a + w.workoutCount, 0)}
-        />
-      ) : (
-      <Card className="relative overflow-hidden">
-        <div aria-hidden className="track-texture pointer-events-none absolute inset-0" />
-        <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 size-64 rounded-full bg-accent/10 blur-3xl" />
-        <div className="relative p-5 sm:p-6">
-          <div className="flex items-center justify-between gap-2">
-            <p className="eyebrow">
-              {inSeason ? `Semana ${weekNo}` : `Semana ISO ${isoWeekNumber(data.currentWeek)}`} · {formatWeekRange(data.currentWeek)}
-            </p>
-            <Badge tone="neutral">En curso</Badge>
-          </div>
+      <SeasonHero
+        summary={summary}
+        seasonName={season.name}
+        nextWeekTarget={nextWeek.targetKm}
+        nextWeekStart={nextWeek.weekStart}
+        workouts={ledger.reduce((a, w) => a + w.workoutCount, 0)}
+      />
 
-          {week.targetKm === 0 ? (
-            <div className="mt-4">
-              <p className="font-display text-4xl font-bold uppercase italic leading-none">Sin objetivo</p>
-              <p className="mt-2 max-w-sm text-sm text-muted">
-                No tienes ningún partido asignado a esta semana.
-                {week.completedKm > 0 && ` Llevas ${formatKm(week.completedKm)} km corridos igualmente.`}
-              </p>
-              <Button asChild size="sm" variant="secondary" className="mt-4">
-                <Link to="/anadir/partido">
-                  <CalendarPlus aria-hidden /> Registrar partido
-                </Link>
-              </Button>
-            </div>
-          ) : (
-            <>
-              <div className="mt-3 flex items-end justify-between gap-4">
-                <div>
-                  {week.met ? (
-                    <p className="flex items-center gap-2 text-sm font-semibold text-accent-text">
-                      <CheckCircle2 className="size-4" aria-hidden /> Objetivo cumplido
-                    </p>
-                  ) : (
-                    <p className="text-sm text-muted">Te faltan</p>
-                  )}
-                  <p className="num mt-1 text-[64px] font-bold leading-[0.85] tracking-tight text-fg sm:text-7xl">
-                    {week.met ? formatKm(week.completedKm) : formatKm(week.pendingKm)}
-                    <span className="ml-1.5 text-2xl text-muted">km</span>
-                  </p>
-                  {week.met && week.completedKm > week.targetKm && (
-                    <p className="mt-1 text-sm text-muted">+{formatKm(week.completedKm - week.targetKm)} km por encima del objetivo</p>
-                  )}
-                </div>
-                <p className="num pb-1 text-4xl font-bold leading-none text-accent-text">{formatPct(week.pct)}</p>
-              </div>
-              <ProgressBar value={week.pct} size="lg" className="mt-4" label="Progreso del objetivo semanal" />
-              <dl className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                <div>
-                  <dt className="text-xs text-muted">Objetivo</dt>
-                  <dd className="num text-xl font-bold">{formatKm(week.targetKm)} km</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted">Corridos</dt>
-                  <dd className="num text-xl font-bold">{formatKm(week.completedKm)} km</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted">Entrenos</dt>
-                  <dd className="num text-xl font-bold">{week.workoutCount}</dd>
-                </div>
-              </dl>
-            </>
-          )}
-          {nextWeek.targetKm > 0 && (
-            <p className="mt-4 flex items-center gap-2 rounded-xl border border-border/70 bg-surface-2/60 px-3 py-2 text-xs text-muted">
-              <Timer className="size-4 text-accent-text" aria-hidden />
-              Próxima semana ({formatWeekRange(nextWeek.weekStart)}): <strong className="text-fg">{nextWeek.targetKm} km</strong> de objetivo
-            </p>
-          )}
-        </div>
-      </Card>
-      )}
+      <NotificationPromptCard />
 
-      {/* ---------- Temporada + acciones ---------- */}
+      {/* ---------- Semana + acciones ---------- */}
       <div className="grid gap-5 lg:grid-cols-2">
-        {accumulated ? (
-          <WeekCard week={week} label={inSeason ? `Semana ${weekNo}` : `Semana ISO ${isoWeekNumber(data.currentWeek)}`} />
-        ) : (
-        <Card>
-          <CardHeader
-            eyebrow="Temporada"
-            title={season.name}
-            action={
-              <Link to="/estadisticas" className="flex items-center gap-1 text-xs font-semibold text-accent-text hover:underline">
-                Estadísticas <ChevronRight className="size-3.5" aria-hidden />
-              </Link>
-            }
-          />
-          <div className="p-4 pt-3 sm:p-5 sm:pt-3">
-            {summary.weeksWithTarget === 0 ? (
-              <p className="text-sm text-muted">Todavía no tienes objetivos en semanas iniciadas. El porcentaje aparecerá con tu primer partido.</p>
-            ) : (
-              <>
-                <div className="flex items-end justify-between">
-                  <p className="num text-5xl font-bold leading-none">{formatPct(summary.pct)}</p>
-                  <p className="text-right text-xs text-muted">
-                    {summary.weeksMet} de {summary.weeksWithTarget} semanas
-                    <br />
-                    con objetivo cumplido
-                  </p>
-                </div>
-                <ProgressBar value={summary.pct} className="mt-3" label="Cumplimiento de la temporada" />
-                <dl className="mt-4 grid grid-cols-3 gap-3">
-                  <div>
-                    <dt className="text-xs text-muted">Objetivos</dt>
-                    <dd className="num text-lg font-bold">{formatKm(summary.targetKm)} km</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-muted">Corridos</dt>
-                    <dd className="num text-lg font-bold">{formatKm(summary.completedKm)} km</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-muted">Pendientes</dt>
-                    <dd className="num text-lg font-bold">{formatKm(summary.pendingKm)} km</dd>
-                  </div>
-                </dl>
-              </>
-            )}
-          </div>
-        </Card>
-        )}
+        <WeekCard week={week} label={inSeason ? `Semana ${weekNo}` : `Semana ISO ${isoWeekNumber(data.currentWeek)}`} />
 
         <nav aria-label="Acciones rápidas" className="grid grid-cols-2 gap-3">
           <QuickAction to="/anadir/entrenamiento" icon={Plus} label="Registrar entrenamiento" primary />
@@ -310,7 +194,7 @@ function DashboardContent({
           />
           {groupTotal.targetKm > 0 && (
             <p className="mx-4 mt-3 rounded-xl border border-border/70 bg-surface-2/60 px-3 py-2 text-xs text-muted sm:mx-5">
-              Entre todos: <strong className="num text-sm text-fg">{formatKm(groupTotal.completedKm)} km</strong> de{' '}
+              Entre todos: <strong className="num text-sm text-fg">{formatKm(groupTotal.attributableKm)} km</strong> válidos de{' '}
               <strong className="num text-sm text-fg">{formatKm(groupTotal.targetKm)} km</strong> ·{' '}
               <strong className="num text-sm text-accent-text">{formatPct(groupTotal.pct)}</strong>
             </p>
@@ -411,7 +295,7 @@ function SeasonHero({
       <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 size-64 rounded-full bg-accent/10 blur-3xl" />
       <div className="relative p-5 sm:p-6">
         <div className="flex items-center justify-between gap-2">
-          <p className="eyebrow">Acumulado · {seasonName}</p>
+          <p className="eyebrow">Competición · {seasonName}</p>
           <Link to="/estadisticas" className="flex items-center gap-1 text-xs font-semibold text-accent-text hover:underline">
             Estadísticas <ChevronRight className="size-3.5" aria-hidden />
           </Link>
@@ -420,8 +304,8 @@ function SeasonHero({
           <div className="mt-4">
             <p className="font-display text-4xl font-bold uppercase italic leading-none">Sin objetivo aún</p>
             <p className="mt-2 max-w-sm text-sm text-muted">
-              Registra tu primer partido: sus goles se sumarán a tu objetivo de la temporada.
-              {summary.completedKm > 0 && ` Ya llevas ${formatKm(summary.completedKm)} km.`}
+              Registra tu partido: sus goles y tarjetas generan tu objetivo de kilómetros.
+              {summary.completedKm > 0 && ` Llevas ${formatKm(summary.completedKm)} km corridos, que cuentan para tus estadísticas.`}
             </p>
             <Button asChild size="sm" variant="secondary" className="mt-4">
               <Link to="/anadir/partido">
@@ -435,42 +319,51 @@ function SeasonHero({
               <div>
                 {upToDate ? (
                   <p className="flex items-center gap-2 text-sm font-semibold text-accent-text">
-                    <CheckCircle2 className="size-4" aria-hidden /> Vas al día
+                    <CheckCircle2 className="size-4" aria-hidden /> Estás al día
                   </p>
                 ) : (
-                  <p className="text-sm text-muted">Te faltan en total</p>
+                  <p className="text-sm text-muted">Te faltan</p>
                 )}
                 <p className="num mt-1 text-[64px] font-bold leading-[0.85] tracking-tight text-fg sm:text-7xl">
-                  {upToDate ? formatKm(summary.completedKm) : formatKm(summary.pendingKm)}
+                  {upToDate ? formatKm(summary.attributableKm) : formatKm(summary.pendingKm)}
                   <span className="ml-1.5 text-2xl text-muted">km</span>
                 </p>
-                {upToDate && summary.extraKm > 0 && (
-                  <p className="mt-1 text-sm text-muted">+{formatKm(summary.extraKm)} km por encima del objetivo acumulado</p>
-                )}
+                <p className="mt-1 text-sm text-muted">
+                  {upToDate ? 'válidos: todos tus objetivos están cubiertos' : 'incluye la deuda de semanas anteriores'}
+                </p>
               </div>
-              <p className="num pb-1 text-4xl font-bold leading-none text-accent-text">{formatPct(summary.pct)}</p>
+              <p className="num shrink-0 whitespace-nowrap pb-1 text-4xl font-bold leading-none text-accent-text">{formatPct(summary.pct)}</p>
             </div>
-            <ProgressBar value={summary.pct} size="lg" className="mt-4" label="Kilómetros hechos sobre el objetivo acumulado" />
+            <ProgressBar value={summary.pct} size="lg" className="mt-4" label="Cumplimiento de objetivos" />
             <dl className="mt-4 grid grid-cols-3 gap-3 text-sm">
               <div>
-                <dt className="text-xs text-muted">Objetivo acum.</dt>
+                <dt className="text-xs text-muted">Objetivos</dt>
                 <dd className="num text-xl font-bold">{formatKm(summary.targetKm)} km</dd>
               </div>
               <div>
-                <dt className="text-xs text-muted">Km hechos</dt>
-                <dd className="num text-xl font-bold">{formatKm(summary.completedKm)} km</dd>
+                <dt className="text-xs text-muted">Válidos</dt>
+                <dd className="num text-xl font-bold">{formatKm(summary.attributableKm)} km</dd>
               </div>
               <div>
-                <dt className="text-xs text-muted">Entrenos</dt>
-                <dd className="num text-xl font-bold">{workouts}</dd>
+                <dt className="text-xs text-muted">Corridos</dt>
+                <dd className="num text-xl font-bold">{formatKm(summary.completedKm)} km</dd>
+                <dd className="text-xs text-muted">{workouts} entrenos</dd>
               </div>
             </dl>
+            {summary.extraKm > 0 && (
+              <p className="mt-3 text-xs text-muted">
+                {formatKm(summary.extraKm)} km corridos por encima de tus objetivos no cuentan para la competición ni para semanas futuras. Sí cuentan en
+                tus estadísticas.
+              </p>
+            )}
           </>
         )}
         {nextWeekTarget > 0 && (
           <p className="mt-4 flex items-center gap-2 rounded-xl border border-border/70 bg-surface-2/60 px-3 py-2 text-xs text-muted">
             <Timer className="size-4 shrink-0 text-accent-text" aria-hidden />
-            Incluye {nextWeekTarget} km del partido asignado a la semana del {formatWeekRange(nextWeekStart)}
+            <span>
+              Próximo objetivo: <strong className="text-fg">{nextWeekTarget} km</strong> en la semana {formatWeekRange(nextWeekStart)}
+            </span>
           </p>
         )}
       </div>
@@ -479,35 +372,49 @@ function SeasonHero({
 }
 
 function WeekCard({ week, label }: { week: WeekLedger; label: string }) {
+  const e = effectiveWeek(week);
   return (
     <Card>
       <CardHeader eyebrow="Esta semana" title={`${label} · ${formatWeekRange(week.weekStart)}`} />
       <div className="p-4 pt-3 sm:p-5 sm:pt-3">
-        <div className="flex items-end justify-between gap-3">
-          <p className="num text-5xl font-bold leading-none">
-            {formatKm(week.completedKm)}
-            <span className="ml-1 text-lg text-muted">km</span>
+        {e.effectiveTargetKm === 0 ? (
+          <p className="text-sm text-muted">
+            Sin objetivo ni deuda esta semana.
+            {e.completedKm > 0 && ` Has corrido ${formatKm(e.completedKm)} km: cuentan para tus estadísticas, no como saldo para próximas semanas.`}
           </p>
-          <p className="text-right text-xs text-muted">
-            {week.targetKm > 0 ? (
-              <>
-                de {week.targetKm} km
-                <br />
-                del partido de esta semana
-              </>
-            ) : (
-              <>
-                sin partido asignado
-                <br />a esta semana
-              </>
+        ) : (
+          <>
+            <div className="flex items-end justify-between gap-3">
+              <p className="num text-5xl font-bold leading-none">
+                {formatKm(e.validKm)}
+                <span className="ml-1 text-lg text-muted">de {formatKm(e.effectiveTargetKm)} km</span>
+              </p>
+              <p className="num shrink-0 whitespace-nowrap text-2xl font-bold leading-none text-accent-text">{formatPct(e.pct)}</p>
+            </div>
+            <ProgressBar value={e.pct} className="mt-3" label="Objetivo efectivo de esta semana" />
+            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
+              <div>
+                <dt className="text-muted">Deuda anterior</dt>
+                <dd className="num text-base font-bold">{formatKm(e.carriedInKm)} km</dd>
+              </div>
+              <div>
+                <dt className="text-muted">Objetivo nuevo</dt>
+                <dd className="num text-base font-bold">{formatKm(e.targetKm)} km</dd>
+              </div>
+              <div>
+                <dt className="text-muted">Corridos</dt>
+                <dd className="num text-base font-bold">{formatKm(e.completedKm)} km</dd>
+              </div>
+              <div>
+                <dt className="text-muted">Pendientes</dt>
+                <dd className="num text-base font-bold">{formatKm(e.pendingKm)} km</dd>
+              </div>
+            </dl>
+            {e.excessKm > 0 && (
+              <p className="mt-3 text-xs text-muted">{formatKm(e.excessKm)} km de esta semana son excedente: no se guardan para semanas futuras.</p>
             )}
-          </p>
-        </div>
-        {week.targetKm > 0 && <ProgressBar value={week.pct} className="mt-3" label="Kilómetros de esta semana" />}
-        <p className="mt-3 text-xs text-muted">
-          {week.workoutCount} {week.workoutCount === 1 ? 'entrenamiento' : 'entrenamientos'} esta semana. Todo lo que corras suma al acumulado de la
-          temporada.
-        </p>
+          </>
+        )}
       </div>
     </Card>
   );

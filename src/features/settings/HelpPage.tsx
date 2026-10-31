@@ -19,13 +19,13 @@ export function HelpPage() {
       <div className="space-y-5">
         <Section title="Cómo funciona el reto">
           <p>
-            Cada árbitro registra el resultado de su <strong>primer partido designado del fin de semana</strong>. La suma de goles de ambos equipos se
-            convierte en kilómetros: un 13-1 son 14 km; un 4-7, 11 km. Por defecto <strong>todo se acumula durante la temporada</strong>: cada partido
-            suma a tu objetivo total y cada carrera suma a tus km hechos. Al final se ve cuántos km tocaba hacer, cuántos se han hecho y qué porcentaje.
+            Cada árbitro registra el resultado y las tarjetas de su <strong>primer partido designado del fin de semana</strong>. Objetivo ={' '}
+            <strong>goles de ambos equipos + amarillas × 1 + azules × 2 + rojas × 5</strong>. Ejemplo: 13-1 con 2 amarillas, 1 azul y 1 roja = 23 km.
           </p>
           <p>
-            Los entrenamientos confirmados se descuentan del objetivo. <strong>Pendientes = objetivo − corridos</strong> (nunca negativo).{' '}
-            <strong>Cumplimiento semanal = corridos ÷ objetivo</strong>, y puede superar el 100 %.
+            Los km que corres pagan primero tus <strong>deudas de semanas anteriores</strong> y después el objetivo de la semana. Si te sobran km
+            cuando ya no debes nada, <strong>se pierden para la competición</strong>: no se guardan para semanas futuras, aunque sí cuentan en tus
+            estadísticas.
           </p>
           <p>
             <strong>Semanas:</strong> de lunes a domingo en la zona horaria de la temporada. Por defecto, un partido cuenta para la semana{' '}
@@ -33,9 +33,8 @@ export function HelpPage() {
             propio partido si el grupo lo acuerda así.
           </p>
           <p>
-            <strong>Cumplimiento de temporada</strong> (metodología «acumulado», la predeterminada) = km hechos ÷ objetivo acumulado. Los km de más de
-            una semana cuentan para el total. Existen dos metodologías alternativas («semanas independientes» y «compensación de semanas anteriores»)
-            que el administrador puede elegir; cada cambio queda registrado.
+            <strong>Cumplimiento</strong> = km válidos ÷ objetivos de las semanas ya iniciadas, con un máximo del 100 %. La clasificación usa este
+            porcentaje, nunca los km totales corridos.
           </p>
           <p>
             <strong>Ritmo medio</strong> = tiempo total ÷ distancia total (solo entrenamientos con duración). <strong>Mejor ritmo</strong>: actividad de
@@ -65,6 +64,14 @@ export function HelpPage() {
 
         <Section title="Instalar en el móvil" id="instalar">
           <InstallInstructions />
+        </Section>
+
+        <Section title="Notificaciones">
+          <p>
+            REFRUN puede recordarte que registres el partido del fin de semana y avisarte de los km que te faltan. Solo se pide permiso cuando pulsas
+            «Activar notificaciones» y puedes cambiar días, hora y tipos de aviso en <strong>Ajustes → Notificaciones</strong>. En iPhone necesitas
+            iOS 16.4 o posterior y abrir REFRUN desde la pantalla de inicio.
+          </p>
         </Section>
 
         <Section title="Sin conexión">

@@ -67,9 +67,9 @@ function MatchForm() {
   });
   const clearDraft = useFormDraft(PREF_KEYS.draftMatch, form);
   const { errors } = form.formState;
-  const [matchDate, weekStart, refereeId, homeGoals, awayGoals, homeTeam, awayTeam, yellowCards, blueCards, redCards] = useWatch({
+  const [matchDate, refereeId, homeGoals, awayGoals, homeTeam, awayTeam, yellowCards, blueCards, redCards] = useWatch({
     control: form.control,
-    name: ['matchDate', 'weekStart', 'refereeId', 'homeGoals', 'awayGoals', 'homeTeam', 'awayTeam', 'yellowCards', 'blueCards', 'redCards'],
+    name: ['matchDate', 'refereeId', 'homeGoals', 'awayGoals', 'homeTeam', 'awayTeam', 'yellowCards', 'blueCards', 'redCards'],
   });
 
   const cardValues = { yellow: yellowCards ?? '', blue: blueCards ?? '', red: redCards ?? '' };
@@ -80,15 +80,17 @@ function MatchForm() {
 
   // El objetivo cuenta desde el sábado 09:00 del fin de semana del partido.
   const period = matchDate && isIsoDate(matchDate) ? matchPeriodOf(matchDate) : null;
+  // Se deriva SIEMPRE de la fecha (nunca de un borrador guardado); el servidor la recalcula igualmente.
+  const weekStart = matchDate && isIsoDate(matchDate) ? matchWeekStart(matchDate) : null;
 
-  const outOfSeason =
-    !!weekStart && isIsoDate(weekStart) && (weekStart > season!.end_date || addDays(weekStart, 6) < season!.start_date);
+  // Misma regla que el servidor: fecha entre (inicio − 7 días) y el fin de la temporada.
+  const outOfSeason = !!weekStart && (matchDate! > season!.end_date || matchDate! < addDays(season!.start_date, -7));
   const duplicate = data.matches.find(
-    (m) => m.referee_id === refereeId && (m.week_start === weekStart || (!!period && matchPeriodOf(m.match_date) === period)),
+    (m) => m.referee_id === refereeId && !!period && matchPeriodOf(m.match_date) === period,
   );
 
   const save = useMutation({
-    mutationFn: (v: MatchFormParsed) => createMatch(group.id, season!.id, toMatchInput(v)),
+    mutationFn: (v: MatchFormParsed) => createMatch(group.id, season!.id, toMatchInput({ ...v, weekStart: matchWeekStart(v.matchDate) })),
     onSuccess: async (match) => {
       clearDraft();
       await queryClient.invalidateQueries({ queryKey: ['matches', season!.id] });

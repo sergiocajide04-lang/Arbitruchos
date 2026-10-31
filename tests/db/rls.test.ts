@@ -248,7 +248,7 @@ describe('partidos y objetivos', () => {
           [G1, S1, B],
         ),
       ),
-      /matches_one_per_referee_week/,
+      /ya tiene un partido registrado en ese fin de semana/,
     );
   });
 
@@ -265,17 +265,26 @@ describe('partidos y objetivos', () => {
     );
   });
 
-  it('rechaza semanas que no empiezan en lunes o fuera de la temporada', async () => {
-    await expectError(
-      t.as(B, () =>
-        q(
-          `insert into public.matches (group_id, season_id, referee_id, match_date, week_start, home_goals, away_goals)
-           values ($1, $2, $3, '2026-10-24', '2026-10-27', 1, 1)`,
-          [G1, S1, B],
-        ),
+  it('el servidor calcula la clave del periodo y rechaza fechas fuera de la temporada', async () => {
+    // Aunque el cliente envíe otra semana, se guarda el lunes del periodo del partido (sábado 24 → lunes 26).
+    const [m] = await t.as(B, () =>
+      q<{ id: string; week_start: string }>(
+        `insert into public.matches (group_id, season_id, referee_id, match_date, week_start, home_goals, away_goals)
+         values ($1, $2, $3, '2026-10-24', '2026-11-02', 1, 1) returning id, week_start::text as week_start`,
+        [G1, S1, B],
       ),
-      /check/,
     );
+    expect(m!.week_start).toBe('2026-10-26');
+    // Y el partido del fin de semana siguiente (sábado 31) no choca con él.
+    const [n] = await t.as(B, () =>
+      q<{ id: string; week_start: string }>(
+        `insert into public.matches (group_id, season_id, referee_id, match_date, week_start, home_goals, away_goals)
+         values ($1, $2, $3, '2026-10-31', '2026-10-26', 2, 1) returning id, week_start::text as week_start`,
+        [G1, S1, B],
+      ),
+    );
+    expect(n!.week_start).toBe('2026-11-02');
+    await t.as(A, () => q(`delete from public.matches where id in ($1, $2)`, [m!.id, n!.id]));
     await expectError(
       t.as(A, () =>
         q(

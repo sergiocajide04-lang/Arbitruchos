@@ -110,6 +110,8 @@ Las migraciones están en `supabase/migrations/` y deben aplicarse **en orden**:
    quedan con 0 tarjetas y los nombres largos existentes se conservan (solo se exige el límite al
    crear o editar).
 5. `20261031120100_notifications.sql` – preferencias, dispositivos y registro de notificaciones.
+6. `20261031150000_match_period_week.sql` – un partido por árbitro y fin de semana (periodo de
+   sábado a sábado); recalcula la clave de semana de los partidos existentes sin cambiar sus datos.
 
 > **Orden al actualizar una instalación existente:** ejecuta primero las migraciones nuevas en
 > Supabase y **después** publica la nueva versión de la web. Al revés, la web pediría columnas

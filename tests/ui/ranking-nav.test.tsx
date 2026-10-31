@@ -44,8 +44,14 @@ beforeEach(() => {
 });
 
 describe('clasificación', () => {
+  it('por defecto muestra el periodo en curso (sábado 9:00 → sábado 8:59)', async () => {
+    renderRoute(<RankingPage />, { path: '/clasificacion' });
+    expect(await screen.findByRole('radio', { name: 'Esta semana' })).toHaveAttribute('aria-checked', 'true');
+  });
+
   it('ordena por cumplimiento relativo, no por distancia', async () => {
     renderRoute(<RankingPage />, { path: '/clasificacion' });
+    await userEvent.click(await screen.findByRole('radio', { name: 'Temporada' }));
     const list = await screen.findByRole('list', { name: 'Clasificación del grupo' });
     const names = within(list).getAllByRole('listitem').map((li) => li.textContent ?? '');
     expect(names[0]).toContain('Luis Gil');
@@ -56,6 +62,7 @@ describe('clasificación', () => {
 
   it('permite cambiar el criterio de orden', async () => {
     renderRoute(<RankingPage />, { path: '/clasificacion' });
+    await userEvent.click(await screen.findByRole('radio', { name: 'Temporada' }));
     await screen.findByRole('list', { name: 'Clasificación del grupo' });
     await userEvent.selectOptions(screen.getByLabelText('Ordenar por'), 'km_desc');
     const items = within(screen.getByRole('list', { name: 'Clasificación del grupo' })).getAllByRole('listitem');
@@ -69,7 +76,8 @@ describe('inicio', () => {
     vi.mocked(api.listMatches).mockResolvedValue([]);
     vi.mocked(api.listWorkouts).mockResolvedValue([]);
     renderRoute(<DashboardPage />);
-    expect((await screen.findAllByText('Sin objetivo')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('Sin objetivo aún')).toBeInTheDocument();
+    expect(screen.getAllByText('Sin partido aún').length).toBeGreaterThan(0);
     expect(screen.getByText('Sin actividad todavía')).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /Registrar partido/ }).length).toBeGreaterThan(0);
   });

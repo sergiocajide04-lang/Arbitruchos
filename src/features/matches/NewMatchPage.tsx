@@ -18,7 +18,7 @@ import { useOnline } from '@/features/pwa/useOnline';
 import { NoSeasonState } from '@/features/seasons/NoSeasonState';
 import { useFormDraft } from '@/hooks/useFormDraft';
 import { useSeasonData } from '@/hooks/useSeasonData';
-import { addDays, formatLongDate, formatPeriodRange, isIsoDate, matchPeriodOf, weekStartOf } from '@/lib/dates';
+import { addDays, formatLongDate, formatPeriodRange, isIsoDate, matchPeriodOf, matchWeekStart } from '@/lib/dates';
 import { toUserMessage } from '@/lib/errors';
 import { PREF_KEYS } from '@/lib/storage';
 import { createMatch } from '@/services/api';
@@ -51,8 +51,8 @@ function MatchForm() {
     resolver: zodResolver(matchFormSchema),
     defaultValues: {
       matchDate: data.today,
-      // Semana ISO del partido (la base de datos impide dos partidos del mismo árbitro en ella).
-      weekStart: weekStartOf(data.today),
+      // Lunes del periodo del partido (la base de datos impide dos partidos del mismo árbitro en él).
+      weekStart: matchWeekStart(data.today),
       refereeId: user.id,
       competition: '',
       homeTeam: '',
@@ -83,7 +83,9 @@ function MatchForm() {
 
   const outOfSeason =
     !!weekStart && isIsoDate(weekStart) && (weekStart > season!.end_date || addDays(weekStart, 6) < season!.start_date);
-  const duplicate = data.matches.find((m) => m.referee_id === refereeId && m.week_start === weekStart);
+  const duplicate = data.matches.find(
+    (m) => m.referee_id === refereeId && (m.week_start === weekStart || (!!period && matchPeriodOf(m.match_date) === period)),
+  );
 
   const save = useMutation({
     mutationFn: (v: MatchFormParsed) => createMatch(group.id, season!.id, toMatchInput(v)),
@@ -157,7 +159,7 @@ function MatchForm() {
               max={addDays(data.today, 1)}
               {...form.register('matchDate', {
                 onChange: (e) => {
-                  if (isIsoDate(e.target.value)) form.setValue('weekStart', weekStartOf(e.target.value));
+                  if (isIsoDate(e.target.value)) form.setValue('weekStart', matchWeekStart(e.target.value));
                 },
               })}
             />
@@ -234,7 +236,7 @@ function MatchForm() {
             <p role="alert" className="flex gap-2 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
               <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
               <span>
-                {referee?.display_name ?? 'Este árbitro'} ya tiene un partido ({duplicate.home_goals}-{duplicate.away_goals}) en esa semana.{' '}
+                {referee?.display_name ?? 'Este árbitro'} ya tiene un partido ({duplicate.home_goals}-{duplicate.away_goals}) en ese periodo ({formatPeriodRange(matchPeriodOf(duplicate.match_date))}).{' '}
                 <Link to="/historial" className="font-semibold underline">
                   Corrígelo desde el historial
                 </Link>

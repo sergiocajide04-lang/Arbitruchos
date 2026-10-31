@@ -16,8 +16,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Avatar, Badge, EmptyState, ErrorBlock, LoadingBlock, ProgressBar, StatusBadge } from '@/components/ui/misc';
-import { combineSummaries, effectiveWeek, summarizeSeason, type SeasonSummary, type WeekLedger } from '@/domain/calc/compliance';
-import { sortRanking } from '@/domain/calc/ranking';
+import { cappedPct, effectiveWeek, summarizeSeason, weekOf, type SeasonSummary, type WeekLedger } from '@/domain/calc/compliance';
 import { ACTIVITY_LABELS, SOURCE_LABELS } from '@/domain/types';
 import { useAuth, useUser } from '@/features/auth/AuthProvider';
 import { useActiveGroup } from '@/features/group/GroupProvider';
@@ -92,8 +91,19 @@ function DashboardContent({
   const summary = summarizeSeason(ledger);
   const weekNo = seasonPeriodIndex(season.start_date, data.currentWeek);
   const inSeason = data.today >= season.start_date && data.today <= season.end_date;
-  const ranking = useMemo(() => sortRanking(data.rows, 'pct_desc'), [data.rows]);
-  const groupTotal = useMemo(() => combineSummaries(data.rows.map((r) => r.summary)), [data.rows]);
+  // «Cómo va el grupo» muestra el periodo en curso: se reinicia cada sábado a las 9:00.
+  const ranking = useMemo(() => {
+    const rows = data.rows.map((r) => ({ userId: r.userId, e: effectiveWeek(weekOf(r.weeks, data.currentWeek, data.currentWeek)) }));
+    return rows.sort((a, b) => {
+      if (a.e.pct === null || b.e.pct === null) return a.e.pct === null ? (b.e.pct === null ? 0 : 1) : -1;
+      return b.e.pct - a.e.pct || b.e.validKm - a.e.validKm;
+    });
+  }, [data.rows, data.currentWeek]);
+  const groupTotal = useMemo(() => {
+    const target = ranking.reduce((a, r) => a + r.e.effectiveTargetKm, 0);
+    const valid = ranking.reduce((a, r) => a + r.e.validKm, 0);
+    return { target, valid, pct: cappedPct(valid, target) };
+  }, [ranking]);
 
   const recent = useMemo(() => {
     const items: Array<{ key: string; at: string; node: ReactNode }> = [];
@@ -184,7 +194,7 @@ function DashboardContent({
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <CardHeader
-            eyebrow="Grupo"
+            eyebrow={`Grupo · esta semana (${formatPeriodRange(data.currentWeek)})`}
             title="Cómo va el grupo"
             action={
               <Link to="/clasificacion" className="flex items-center gap-1 text-xs font-semibold text-accent-text hover:underline">
@@ -192,10 +202,10 @@ function DashboardContent({
               </Link>
             }
           />
-          {groupTotal.targetKm > 0 && (
+          {groupTotal.target > 0 && (
             <p className="mx-4 mt-3 rounded-xl border border-border/70 bg-surface-2/60 px-3 py-2 text-xs text-muted sm:mx-5">
-              Entre todos: <strong className="num text-sm text-fg">{formatKm(groupTotal.attributableKm)} km</strong> válidos de{' '}
-              <strong className="num text-sm text-fg">{formatKm(groupTotal.targetKm)} km</strong> ·{' '}
+              Entre todos: <strong className="num text-sm text-fg">{formatKm(groupTotal.valid)} km</strong> válidos de{' '}
+              <strong className="num text-sm text-fg">{formatKm(groupTotal.target)} km</strong> ·{' '}
               <strong className="num text-sm text-accent-text">{formatPct(groupTotal.pct)}</strong>
             </p>
           )}
@@ -213,9 +223,9 @@ function DashboardContent({
                           {p?.display_name ?? 'Miembro'}
                           {me && <span className="sr-only"> (tú)</span>}
                         </p>
-                        <p className="num shrink-0 text-base font-bold">{formatPct(row.summary.pct)}</p>
+                        <p className="num shrink-0 text-base font-bold">{row.e.pct === null ? 'Sin partido aún' : formatPct(row.e.pct)}</p>
                       </div>
-                      <ProgressBar value={row.summary.pct} size="sm" className="mt-1.5" label={`Cumplimiento de ${p?.display_name ?? 'miembro'}`} />
+                      <ProgressBar value={row.e.pct} size="sm" className="mt-1.5" label={`Cumplimiento de ${p?.display_name ?? 'miembro'}`} />
                     </div>
                   </Link>
                 </li>

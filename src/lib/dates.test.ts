@@ -86,3 +86,12 @@ describe('periodo de competición (sábado 9:00 → sábado 8:59)', () => {
     expect(formatPeriodRange('2026-10-31')).toBe('sáb 31 oct – sáb 7 nov');
   });
 });
+
+describe('clave de semana de un partido', () => {
+  it('es el lunes de su periodo: un partido por árbitro y fin de semana', async () => {
+    const { matchWeekStart } = await import('./dates');
+    expect(matchWeekStart('2026-10-24')).toBe('2026-10-26'); // sábado 24
+    expect(matchWeekStart('2026-10-25')).toBe('2026-10-26'); // domingo 25
+    expect(matchWeekStart('2026-10-31')).toBe('2026-11-02'); // sábado 31: ya no choca con el del 24
+  });
+});

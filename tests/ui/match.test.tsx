@@ -98,7 +98,7 @@ describe('registro de partido', () => {
     expect(vi.mocked(api.createMatch).mock.calls[0]![2]).toMatchObject({
       referee_id: ME,
       match_date: '2026-10-24',
-      week_start: '2026-10-19',
+      week_start: '2026-10-26',
       home_goals: 4,
       away_goals: 7,
       yellow_cards: 0,

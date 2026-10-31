@@ -67,7 +67,8 @@ export function RankingPage() {
   const { season, profileOf } = useActiveGroup();
   const data = useRanking();
   const [sort, setSort] = useState<RankingSort>(() => (readPref(PREF_KEYS.rankingSort) as RankingSort | null) ?? 'pct_desc');
-  const [scope, setScope] = useState<Scope>('season');
+  // Por defecto, el periodo en curso (se reinicia cada sábado a las 9:00).
+  const [scope, setScope] = useState<Scope>('week');
 
   const rows = useMemo(() => {
     // Para el ámbito semanal se reutiliza la ordenación con los datos de la semana.

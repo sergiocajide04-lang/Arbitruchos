@@ -169,6 +169,15 @@ export function matchPeriodOf(matchDate: IsoDate): IsoDate {
   return isoWeekday(matchDate) === 5 ? addDays(matchDate, 1) : periodStartOf(matchDate);
 }
 
+/**
+ * Valor de matches.week_start para un partido: el lunes dentro de su periodo.
+ * Cada periodo (sábado → viernes) contiene un único lunes, así que la restricción
+ * «un partido por árbitro y semana» de la base de datos equivale a «uno por periodo».
+ */
+export function matchWeekStart(matchDate: IsoDate): IsoDate {
+  return addDays(matchPeriodOf(matchDate), 2);
+}
+
 /** Periodo en curso en una zona horaria. */
 export function currentPeriodIn(timeZone: string, now: Date = new Date()): IsoDate {
   return periodStartOf(todayInTimeZone(timeZone, now), timeInTimeZone(timeZone, now));

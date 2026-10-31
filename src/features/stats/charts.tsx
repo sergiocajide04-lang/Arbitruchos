@@ -24,7 +24,7 @@ import {
   type TooltipProps,
 } from 'recharts';
 import { Card, CardHeader } from '@/components/ui/card';
-import { formatDayMonth, formatMonthYear, formatWeekRange } from '@/lib/dates';
+import { formatDayMonth, formatMonthYear, formatPeriodRange } from '@/lib/dates';
 import { formatKm, formatPace, formatPct } from '@/lib/format';
 import type { MonthPoint, WeekPoint } from './series';
 
@@ -61,7 +61,7 @@ function ChartTooltip({
   payload,
   label,
   format,
-  labelFormat = (l) => `Semana ${formatWeekRange(String(l))}`,
+  labelFormat = (l) => `Periodo ${formatPeriodRange(String(l))}`,
 }: TooltipProps<number, string> & {
   format: (name: string, value: number | null) => string;
   labelFormat?: (label: unknown) => string;
@@ -132,7 +132,7 @@ function WeekTable({ rows, cols }: { rows: WeekPoint[]; cols: Array<{ label: str
       <tbody>
         {rows.map((r) => (
           <tr key={r.weekStart} className="border-t border-border/40">
-            <td className="py-1 pr-2">{formatWeekRange(r.weekStart)}</td>
+            <td className="py-1 pr-2">{formatPeriodRange(r.weekStart)}</td>
             {cols.map((c) => (
               <td key={c.label} className="num py-1 pr-2 text-right">
                 {c.value(r)}

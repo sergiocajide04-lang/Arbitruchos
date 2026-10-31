@@ -141,3 +141,55 @@ export function formatWeekRange(weekStart: IsoDate): string {
 export function monthKey(date: IsoDate): string {
   return date.slice(0, 7);
 }
+
+// ---------------------------------------------------------------------------
+// Periodo de competición: del SÁBADO a las 09:00 al sábado siguiente a las 08:59
+// (zona horaria de la temporada). Un periodo se identifica por la fecha de su
+// sábado de inicio. Es la «semana» de todos los cálculos de cumplimiento.
+// ---------------------------------------------------------------------------
+export const PERIOD_START_HOUR = 9;
+
+/**
+ * Periodo al que pertenece un momento. Un sábado antes de las 09:00 pertenece al
+ * periodo anterior. Si no se conoce la hora (entrenos sin hora), un sábado cuenta
+ * para el periodo que empieza ese día.
+ */
+export function periodStartOf(date: IsoDate, time?: string | null): IsoDate {
+  const sinceSaturday = (isoWeekday(date) + 1) % 7; // sábado → 0, domingo → 1, … viernes → 6
+  if (sinceSaturday === 0 && time && Number(time.slice(0, 2)) < PERIOD_START_HOUR) return addDays(date, -7);
+  return addDays(date, -sinceSaturday);
+}
+
+/**
+ * Periodo en el que empieza a contar el objetivo de un partido: el del fin de
+ * semana en que se juega (sábado o domingo → ese sábado; viernes → el sábado
+ * siguiente). Entre semana, el periodo en curso.
+ */
+export function matchPeriodOf(matchDate: IsoDate): IsoDate {
+  return isoWeekday(matchDate) === 5 ? addDays(matchDate, 1) : periodStartOf(matchDate);
+}
+
+/** Periodo en curso en una zona horaria. */
+export function currentPeriodIn(timeZone: string, now: Date = new Date()): IsoDate {
+  return periodStartOf(todayInTimeZone(timeZone, now), timeInTimeZone(timeZone, now));
+}
+
+/** Sábados de inicio de periodo desde el de `start` hasta el de `end`, ambos incluidos. */
+export function periodsInRange(start: IsoDate, end: IsoDate): IsoDate[] {
+  const out: IsoDate[] = [];
+  for (let p = periodStartOf(start); p <= periodStartOf(end); p = addDays(p, 7)) out.push(p);
+  return out;
+}
+
+/** Número de periodo dentro de la temporada (1 = el que contiene start_date). */
+export function seasonPeriodIndex(seasonStart: IsoDate, period: IsoDate): number {
+  return Math.floor(daysBetween(periodStartOf(seasonStart), period) / 7) + 1;
+}
+
+const weekdayDayMonth = new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+/** "sáb 31 oct – sáb 7 nov" (de sábado 9:00 a sábado 8:59). */
+export function formatPeriodRange(period: IsoDate): string {
+  const f = (d: IsoDate) => weekdayDayMonth.format(toUtc(d)).replace(/[.,]/g, '');
+  return `${f(period)} – ${f(addDays(period, 7))}`;
+}

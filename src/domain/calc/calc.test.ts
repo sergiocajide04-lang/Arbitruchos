@@ -38,9 +38,10 @@ function workout(partial: Partial<WorkoutLike> & { activity_date: string; distan
   };
 }
 
-const W1 = '2026-10-19';
-const W2 = '2026-10-26';
-const W3 = '2026-11-02';
+// Periodos de competición (sábado 9:00 → sábado 8:59). Los partidos se juegan ese sábado.
+const W1 = '2026-10-17';
+const W2 = '2026-10-24';
+const W3 = '2026-10-31';
 
 describe('objetivo de un partido', () => {
   it.each([
@@ -77,7 +78,7 @@ describe('objetivo de un partido', () => {
 
 describe('semana (libro con asignación de km)', () => {
   it('objetivo 14 km con carreras de 5 y 4 km deja 5 km pendientes', () => {
-    const matches: MatchLike[] = [{ referee_id: 'u1', week_start: W1, target_km: 14 }];
+    const matches: MatchLike[] = [{ referee_id: 'u1', match_date: W1, target_km: 14 }];
     const workouts = [workout({ activity_date: '2026-10-20', distance_km: 5 }), workout({ activity_date: '2026-10-22', distance_km: 4 })];
     const [week] = buildWeeklyLedger('u1', matches, workouts, season, W1);
     expect(week).toMatchObject({ targetKm: 14, completedKm: 9, validKm: 9, pendingKm: 5, met: false, workoutCount: 2 });
@@ -92,7 +93,7 @@ describe('semana (libro con asignación de km)', () => {
   });
 
   it('los km de más se muestran como corridos, pero no como válidos', () => {
-    const matches: MatchLike[] = [{ referee_id: 'u1', week_start: W1, target_km: 10 }];
+    const matches: MatchLike[] = [{ referee_id: 'u1', match_date: W1, target_km: 10 }];
     const workouts = [workout({ activity_date: '2026-10-20', distance_km: 12.5 })];
     const [week] = buildWeeklyLedger('u1', matches, workouts, season, W1);
     expect(week).toMatchObject({ completedKm: 12.5, validKm: 10, excessKm: 2.5, pendingKm: 0, met: true, pct: 100 });
@@ -108,16 +109,16 @@ describe('semana (libro con asignación de km)', () => {
 
   it('suma varios partidos asignados a la misma semana', () => {
     const matches: MatchLike[] = [
-      { referee_id: 'u1', week_start: W1, target_km: 6 },
-      { referee_id: 'u1', week_start: W1, target_km: 4 },
-      { referee_id: 'u2', week_start: W1, target_km: 30 },
+      { referee_id: 'u1', match_date: W1, target_km: 6 },
+      { referee_id: 'u1', match_date: W1, target_km: 4 },
+      { referee_id: 'u2', match_date: W1, target_km: 30 },
     ];
     const [week] = buildWeeklyLedger('u1', matches, [], season, W1);
     expect(week).toMatchObject({ targetKm: 10, matchCount: 2 });
   });
 
   it('suma decimales sin errores de coma flotante visibles', () => {
-    const matches: MatchLike[] = [{ referee_id: 'u1', week_start: W1, target_km: 1 }];
+    const matches: MatchLike[] = [{ referee_id: 'u1', match_date: W1, target_km: 1 }];
     const workouts = [0.1, 0.2, 0.7].map((km, i) => workout({ activity_date: `2026-10-2${i}`, distance_km: km }));
     const [week] = buildWeeklyLedger('u1', matches, workouts, season, W1);
     expect(week!.completedKm).toBe(1);
@@ -128,9 +129,9 @@ describe('semana (libro con asignación de km)', () => {
 
 describe('cumplimiento de temporada', () => {
   const matches: MatchLike[] = [
-    { referee_id: 'u1', week_start: W1, target_km: 10 },
-    { referee_id: 'u1', week_start: W2, target_km: 20 },
-    { referee_id: 'u1', week_start: W3, target_km: 8 },
+    { referee_id: 'u1', match_date: W1, target_km: 10 },
+    { referee_id: 'u1', match_date: W2, target_km: 20 },
+    { referee_id: 'u1', match_date: W3, target_km: 8 },
   ];
   const workouts = [
     workout({ activity_date: '2026-10-20', distance_km: 6 }), // W1: 6/10 (deuda 4)
@@ -154,7 +155,7 @@ describe('cumplimiento de temporada', () => {
   });
 
   it('editar un partido recalcula objetivos de forma coherente', () => {
-    const corrected = matches.map((m) => (m.week_start === W1 ? { ...m, target_km: 6 } : m));
+    const corrected = matches.map((m) => (m.match_date === W1 ? { ...m, target_km: 6 } : m));
     const after = summarizeSeason(buildWeeklyLedger('u1', corrected, workouts, season, W2));
     expect(after.targetKm).toBe(26);
     expect(after.pct).toBe(100);
@@ -200,8 +201,8 @@ describe('estadísticas', () => {
 describe('clasificación', () => {
   it('ordena por cumplimiento relativo y no por distancia absoluta', () => {
     const matches: MatchLike[] = [
-      { referee_id: 'a', week_start: W1, target_km: 100 },
-      { referee_id: 'b', week_start: W1, target_km: 50 },
+      { referee_id: 'a', match_date: W1, target_km: 100 },
+      { referee_id: 'b', match_date: W1, target_km: 50 },
     ];
     const ws = [
       workout({ user_id: 'a', activity_date: '2026-10-20', distance_km: 80 }),
@@ -218,8 +219,8 @@ describe('clasificación', () => {
 
   it('los km excedentes no dan ventaja: a igual 100 % no gana quien corrió más', () => {
     const matches: MatchLike[] = [
-      { referee_id: 'a', week_start: W1, target_km: 10 },
-      { referee_id: 'b', week_start: W1, target_km: 20 },
+      { referee_id: 'a', match_date: W1, target_km: 10 },
+      { referee_id: 'b', match_date: W1, target_km: 20 },
     ];
     const ws = [
       workout({ user_id: 'a', activity_date: '2026-10-20', distance_km: 60 }),

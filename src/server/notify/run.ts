@@ -68,7 +68,7 @@ async function load(db: SupabaseClient) {
     all<PlanWorkout>((a, b) =>
       db
         .from('workouts')
-        .select('id, group_id, user_id, activity_date, week_start, distance_km, duration_s, activity_type, validation_status')
+        .select('id, group_id, user_id, activity_date, activity_time, week_start, distance_km, duration_s, activity_type, validation_status')
         .in('group_id', groupIds)
         .gte('activity_date', minStart)
         .range(a, b),

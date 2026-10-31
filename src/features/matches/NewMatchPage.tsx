@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ArrowRight, Flag } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -18,7 +18,7 @@ import { useOnline } from '@/features/pwa/useOnline';
 import { NoSeasonState } from '@/features/seasons/NoSeasonState';
 import { useFormDraft } from '@/hooks/useFormDraft';
 import { useSeasonData } from '@/hooks/useSeasonData';
-import { addDays, defaultComplianceWeek, formatLongDate, formatWeekRange, isIsoDate, weekStartOf } from '@/lib/dates';
+import { addDays, formatLongDate, formatPeriodRange, isIsoDate, matchPeriodOf, weekStartOf } from '@/lib/dates';
 import { toUserMessage } from '@/lib/errors';
 import { PREF_KEYS } from '@/lib/storage';
 import { createMatch } from '@/services/api';
@@ -51,7 +51,8 @@ function MatchForm() {
     resolver: zodResolver(matchFormSchema),
     defaultValues: {
       matchDate: data.today,
-      weekStart: defaultComplianceWeek(data.today),
+      // Semana ISO del partido (la base de datos impide dos partidos del mismo árbitro en ella).
+      weekStart: weekStartOf(data.today),
       refereeId: user.id,
       competition: '',
       homeTeam: '',
@@ -77,15 +78,8 @@ function MatchForm() {
   const preview = previewTarget(homeGoals ?? '', awayGoals ?? '', cardValues);
   const referee = profileOf(refereeId ?? '');
 
-  // Semanas posibles: la del partido y la siguiente (por defecto, la siguiente).
-  const weekOptions = useMemo(() => {
-    if (!matchDate || !isIsoDate(matchDate)) return [];
-    const own = weekStartOf(matchDate);
-    return [
-      { value: addDays(own, 7), label: `Semana siguiente · ${formatWeekRange(addDays(own, 7))}` },
-      { value: own, label: `Semana del partido · ${formatWeekRange(own)}` },
-    ];
-  }, [matchDate]);
+  // El objetivo cuenta desde el sábado 09:00 del fin de semana del partido.
+  const period = matchDate && isIsoDate(matchDate) ? matchPeriodOf(matchDate) : null;
 
   const outOfSeason =
     !!weekStart && isIsoDate(weekStart) && (weekStart > season!.end_date || addDays(weekStart, 6) < season!.start_date);
@@ -96,7 +90,7 @@ function MatchForm() {
     onSuccess: async (match) => {
       clearDraft();
       await queryClient.invalidateQueries({ queryKey: ['matches', season!.id] });
-      toast.success(`Partido guardado: ${match.target_km} km de objetivo para la semana ${formatWeekRange(match.week_start)}.`);
+      toast.success(`Partido guardado: ${match.target_km} km de objetivo desde el sábado ${formatPeriodRange(matchPeriodOf(match.match_date)).split(' – ')[0]} a las 9:00.`);
       navigate('/', { replace: true });
     },
     onError: (e) => toast.error(toUserMessage(e)),
@@ -153,28 +147,21 @@ function MatchForm() {
             errors={{ yellow: errors.yellowCards?.message, blue: errors.blueCards?.message, red: errors.redCards?.message }}
           />
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Fecha del partido" error={errors.matchDate?.message}>
-              <Input
-                type="date"
-                max={addDays(data.today, 1)}
-                {...form.register('matchDate', {
-                  onChange: (e) => {
-                    if (isIsoDate(e.target.value)) form.setValue('weekStart', defaultComplianceWeek(e.target.value));
-                  },
-                })}
-              />
-            </Field>
-            <Field label="Semana de cumplimiento" error={errors.weekStart?.message} hint="Por defecto, la semana siguiente al partido.">
-              <Select {...form.register('weekStart')}>
-                {weekOptions.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          </div>
+          <Field
+            label="Fecha del partido"
+            error={errors.matchDate?.message ?? errors.weekStart?.message}
+            hint={period ? `El objetivo cuenta desde el sábado a las 9:00: ${formatPeriodRange(period)}.` : undefined}
+          >
+            <Input
+              type="date"
+              max={addDays(data.today, 1)}
+              {...form.register('matchDate', {
+                onChange: (e) => {
+                  if (isIsoDate(e.target.value)) form.setValue('weekStart', weekStartOf(e.target.value));
+                },
+              })}
+            />
+          </Field>
 
           <Field
             label="Árbitro al que se asigna el objetivo"
@@ -236,8 +223,8 @@ function MatchForm() {
                   <dd className="truncate font-medium">{referee?.display_name ?? '—'}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <dt className="text-muted">Semana</dt>
-                  <dd className="font-medium">{weekStart && isIsoDate(weekStart) ? formatWeekRange(weekStart) : '—'}</dd>
+                  <dt className="text-muted">Cuenta en</dt>
+                  <dd className="text-right font-medium">{period ? formatPeriodRange(period) : '—'}</dd>
                 </div>
               </dl>
             </div>
@@ -296,7 +283,7 @@ function MatchForm() {
             <Row label="Objetivo generado" value={`${preview.target} km`} strong />
             <Row label="Árbitro" value={profileOf(pending.refereeId)?.display_name ?? '—'} />
             <Row label="Fecha del partido" value={formatLongDate(pending.matchDate)} />
-            <Row label="Semana de cumplimiento" value={formatWeekRange(pending.weekStart)} />
+            <Row label="Periodo (desde el sábado 9:00)" value={formatPeriodRange(matchPeriodOf(pending.matchDate))} />
           </dl>
         )}
       </Dialog>

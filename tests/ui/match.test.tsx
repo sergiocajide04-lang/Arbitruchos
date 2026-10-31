@@ -78,7 +78,7 @@ describe('registro de partido', () => {
   });
 
   it('pide confirmación mostrando árbitro y semana, y guarda', async () => {
-    vi.mocked(api.createMatch).mockResolvedValueOnce({ target_km: 11, week_start: '2026-10-26' } as never);
+    vi.mocked(api.createMatch).mockResolvedValueOnce({ target_km: 11, week_start: '2026-10-19', match_date: '2026-10-24' } as never);
     renderRoute(<NewMatchPage />, { path: '/anadir/partido' });
     const date = await screen.findByLabelText('Fecha del partido');
     await userEvent.clear(date);
@@ -90,14 +90,15 @@ describe('registro de partido', () => {
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Objetivo generado').nextSibling).toHaveTextContent('11 km');
     expect(within(dialog).getByText('Marta López')).toBeInTheDocument();
-    expect(within(dialog).getByText('26 oct – 1 nov')).toBeInTheDocument();
+    // Partido del sábado 24: el objetivo cuenta desde ese sábado a las 9:00.
+    expect(within(dialog).getByText('sáb 24 oct – sáb 31 oct')).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: /Guardar partido/ }));
 
     await waitFor(() => expect(api.createMatch).toHaveBeenCalled());
     expect(vi.mocked(api.createMatch).mock.calls[0]![2]).toMatchObject({
       referee_id: ME,
       match_date: '2026-10-24',
-      week_start: '2026-10-26',
+      week_start: '2026-10-19',
       home_goals: 4,
       away_goals: 7,
       yellow_cards: 0,

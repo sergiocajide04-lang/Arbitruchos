@@ -19,9 +19,10 @@ import {
  */
 const season: SeasonRules = { start_date: '2026-09-01', end_date: '2027-06-30', counted_activity_types: ['run', 'treadmill'] };
 
-const W1 = '2026-10-05';
-const W2 = '2026-10-12';
-const W3 = '2026-10-19';
+// Periodos de competición: sábados (el partido se juega ese sábado y cuenta desde las 9:00).
+const W1 = '2026-10-03';
+const W2 = '2026-10-10';
+const W3 = '2026-10-17';
 
 const run = (date: string, km: number, user = 'u1', durationS: number | null = null): WorkoutLike => ({
   user_id: user,
@@ -32,7 +33,7 @@ const run = (date: string, km: number, user = 'u1', durationS: number | null = n
   activity_type: 'run',
   validation_status: 'confirmed',
 });
-const goal = (week: string, km: number, user = 'u1'): MatchLike => ({ referee_id: user, week_start: week, target_km: km });
+const goal = (week: string, km: number, user = 'u1'): MatchLike => ({ referee_id: user, match_date: week, target_km: km });
 
 const summary = (matches: MatchLike[], workouts: WorkoutLike[], current: string) =>
   summarizeSeason(buildWeeklyLedger('u1', matches, workouts, season, current));
@@ -137,6 +138,26 @@ describe('compensación de deudas sin saldo a favor', () => {
   it('una semana sin registros arrastra la deuda viva', () => {
     const ledger = buildWeeklyLedger('u1', [goal(W1, 10)], [run('2026-10-06', 6)], season, W2);
     expect(weekOf(ledger, W2, W2)).toMatchObject({ carriedInKm: 4, outstandingKm: 4, targetKm: 0 });
+  });
+});
+
+describe('periodo de sábado 9:00 a sábado 8:59', () => {
+  // Caso real: árbitro al 100 % que el sábado 31-10 registra un 5-0 con 1 amarilla (6 km).
+  const prev = goal('2026-10-24', 10);
+  const nuevo = goal('2026-10-31', 6);
+  const done = run('2026-10-27', 10);
+  const at = (date: string, time: string | null, km: number): WorkoutLike => ({ ...run(date, km), activity_time: time });
+
+  it('el objetivo del partido del sábado cuenta desde ese sábado a las 9:00', () => {
+    // Viernes / sábado antes de las 9: periodo anterior, sigue al 100 %.
+    expect(summary([prev, nuevo], [done], '2026-10-24')).toMatchObject({ pct: 100, upcomingTargetKm: 6 });
+    // Sábado desde las 9:00: el objetivo nuevo ya cuenta.
+    expect(summary([prev, nuevo], [done], '2026-10-31')).toMatchObject({ targetKm: 16, pendingKm: 6, pct: 62.5 });
+  });
+
+  it('lo corrido el sábado desde las 9:00 paga el objetivo nuevo; antes de las 9:00, no', () => {
+    expect(summary([prev, nuevo], [done, at('2026-10-31', '18:00', 6.52)], '2026-10-31')).toMatchObject({ pendingKm: 0, pct: 100 });
+    expect(summary([prev, nuevo], [done, at('2026-10-31', '08:00', 6.52)], '2026-10-31')).toMatchObject({ pendingKm: 6, extraKm: 6.52 });
   });
 });
 

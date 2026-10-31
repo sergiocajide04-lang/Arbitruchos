@@ -17,7 +17,7 @@
  *     registro de envíos, no se vuelve a planificar.
  */
 import { buildWeeklyLedger, summarizeSeason, type MatchLike, type SeasonRules, type WorkoutLike } from '@/domain/calc/compliance';
-import { addDays, isoWeekday, isWithin, todayInTimeZone, weekStartOf, type IsoDate } from '@/lib/dates';
+import { addDays, currentPeriodIn, isoWeekday, isWithin, todayInTimeZone, weekStartOf, type IsoDate } from '@/lib/dates';
 import { formatKm } from '@/lib/format';
 
 export type NotificationKind = 'match_reminder' | 'km_reminder' | 'km_done';
@@ -123,7 +123,7 @@ export function planNotifications(input: PlanInput): PlannedNotification[] {
     const hour = hourInTimeZone(season.timezone, input.now);
     if (hour < QUIET_BEFORE_HOUR || hour > QUIET_AFTER_HOUR) continue;
     const dow = isoWeekday(today);
-    const currentWeek = weekStartOf(today);
+    const currentWeek = currentPeriodIn(season.timezone, input.now);
     const tag = season.id.slice(0, 8);
 
     const seasonMatches = input.matches.filter((m) => m.season_id === season.id);

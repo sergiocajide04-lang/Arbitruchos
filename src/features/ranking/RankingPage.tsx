@@ -12,7 +12,7 @@ import { useActiveGroup } from '@/features/group/GroupProvider';
 import { NoSeasonState } from '@/features/seasons/NoSeasonState';
 import { SeasonPicker } from '@/features/seasons/SeasonPicker';
 import { useRanking } from '@/hooks/useSeasonData';
-import { formatWeekRange } from '@/lib/dates';
+import { formatPeriodRange } from '@/lib/dates';
 import { toUserMessage } from '@/lib/errors';
 import { formatKm, formatPace, formatPct } from '@/lib/format';
 import { PREF_KEYS, readPref, writePref } from '@/lib/storage';
@@ -93,7 +93,7 @@ export function RankingPage() {
       <PageHeader
         title="Clasificación"
         subtitle={
-          season ? (scope === 'season' ? `${season.name} · cumplimiento de objetivos` : `Semana ${formatWeekRange(data.currentWeek)}`) : undefined
+          season ? (scope === 'season' ? `${season.name} · cumplimiento de objetivos` : `Periodo ${formatPeriodRange(data.currentWeek)} (de sábado 9:00 a sábado 8:59)`) : undefined
         }
       />
       {!season ? (

@@ -3,6 +3,7 @@ import {
   buildWeeklyLedger,
   isCountable,
   summarizeSeason,
+  workoutPeriod,
   type MatchLike,
   type SeasonRules,
   type SeasonSummary,
@@ -38,7 +39,7 @@ export function buildRanking(
   return userIds.map((userId) => {
     const weeks = buildWeeklyLedger(userId, matches, workouts, season, currentWeek);
     const counted = workouts.filter(
-      (w) => w.user_id === userId && isCountable(w, season) && w.week_start <= currentWeek,
+      (w) => w.user_id === userId && isCountable(w, season) && workoutPeriod(w) <= currentWeek,
     );
     return {
       userId,

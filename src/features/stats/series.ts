@@ -1,7 +1,7 @@
 /** Series semanales/mensuales para gráficos y tablas (derivadas de compliance/stats). */
-import type { WeekLedger, WorkoutLike } from '@/domain/calc/compliance';
+import { workoutPeriod, type WeekLedger, type WorkoutLike } from '@/domain/calc/compliance';
 import { aggregatePace } from '@/domain/calc/stats';
-import { addDays, monthKey, weekStartOf, weeksInRange, type IsoDate } from '@/lib/dates';
+import { addDays, monthKey, periodStartOf, periodsInRange, type IsoDate } from '@/lib/dates';
 
 export interface WeekPoint {
   weekStart: IsoDate;
@@ -28,7 +28,7 @@ export function weeklySeries(
   const byWeek = new Map(ledger.map((w) => [w.weekStart, w]));
   let cumKm = 0;
   let cumTarget = 0;
-  return weeksInRange(from, to).map((weekStart) => {
+  return periodsInRange(from, to).map((weekStart) => {
     const l = byWeek.get(weekStart);
     const km = l?.completedKm ?? 0;
     const target = l?.targetKm ?? 0;
@@ -39,7 +39,7 @@ export function weeklySeries(
       km,
       target,
       pct: l?.pct ?? null,
-      pace: aggregatePace(countedWorkouts.filter((w) => w.week_start === weekStart)),
+      pace: aggregatePace(countedWorkouts.filter((w) => workoutPeriod(w) === weekStart)),
       cumKm: Math.round(cumKm * 1000) / 1000,
       cumTarget,
     };
@@ -78,8 +78,8 @@ export type Period = 'season' | '12w' | '4w';
 
 /** Rango de semanas mostrado según el periodo, sin pasar de la semana actual ni del fin de temporada. */
 export function periodRange(period: Period, seasonStart: IsoDate, seasonEnd: IsoDate, currentWeek: IsoDate): [IsoDate, IsoDate] {
-  const lastWeek = currentWeek < weekStartOf(seasonEnd) ? currentWeek : weekStartOf(seasonEnd);
-  const firstWeek = weekStartOf(seasonStart);
+  const lastWeek = currentWeek < periodStartOf(seasonEnd) ? currentWeek : periodStartOf(seasonEnd);
+  const firstWeek = periodStartOf(seasonStart);
   if (period === 'season') return [firstWeek, lastWeek];
   const span = period === '12w' ? 11 : 3;
   const candidate = addDays(lastWeek, -7 * span);

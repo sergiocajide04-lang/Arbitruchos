@@ -19,7 +19,7 @@ const { AppShell } = await import('@/components/layout/AppShell');
 
 const W = '2026-10-12';
 const match = (referee: string, target: number): Match =>
-  ({ id: `m-${referee}`, referee_id: referee, week_start: W, target_km: target, home_goals: target, away_goals: 0, created_at: '2026-10-11T10:00:00Z' }) as Match;
+  ({ id: `m-${referee}`, referee_id: referee, week_start: W, match_date: '2026-10-10', target_km: target, home_goals: target, away_goals: 0, created_at: '2026-10-11T10:00:00Z' }) as Match;
 const workout = (user: string, km: number): Workout =>
   ({
     id: `w-${user}`,

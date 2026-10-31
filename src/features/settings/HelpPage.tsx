@@ -28,9 +28,8 @@ export function HelpPage() {
             estadísticas.
           </p>
           <p>
-            <strong>Semanas:</strong> de lunes a domingo en la zona horaria de la temporada. Por defecto, un partido cuenta para la semana{' '}
-            <strong>siguiente</strong> (el partido del sábado 24 genera el objetivo del lunes 26 al domingo 1). Al registrarlo puedes elegir la semana del
-            propio partido si el grupo lo acuerda así.
+            <strong>Semanas:</strong> van del <strong>sábado a las 9:00 al sábado siguiente a las 8:59</strong>. El objetivo del partido del fin de
+            semana empieza a contar ese sábado a las 9:00 y lo que corras desde entonces lo va pagando. Lo corrido antes no cuenta para ese objetivo.
           </p>
           <p>
             <strong>Cumplimiento</strong> = km válidos ÷ objetivos de las semanas ya iniciadas, con un máximo del 100 %. La clasificación usa este

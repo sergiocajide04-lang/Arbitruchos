@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { weekStartOf } from '@/lib/dates';
+import { addDays, weekStartOf } from '@/lib/dates';
 import { lastWeekendWeek, planNotifications, type PlanInput, type PlanLogEntry, type PlanMatch, type PlanSettings, type PlanWorkout } from './plan';
 
 // Temporada en Europe/Madrid (UTC+1 desde el 25-10-2026).
@@ -24,8 +24,8 @@ const SUNDAY_2030 = new Date('2026-11-01T19:30:00Z');
 const goal = (week: string, km: number): PlanMatch => ({
   season_id: SEASON.id,
   referee_id: U,
-  week_start: week,
-  match_date: '2026-10-24',
+  // Partido jugado el sábado anterior al lunes indicado: cuenta desde ese sábado a las 9:00.
+  match_date: addDays(week, -2),
   target_km: km,
 });
 const run = (date: string, km: number): PlanWorkout => ({

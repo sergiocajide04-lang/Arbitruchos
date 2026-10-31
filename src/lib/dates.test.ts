@@ -61,3 +61,28 @@ describe('formatos', () => {
     expect(initials('Marta López Gil')).toBe('MG');
   });
 });
+
+describe('periodo de competición (sábado 9:00 → sábado 8:59)', () => {
+  it('asigna cada momento a su periodo', async () => {
+    const { periodStartOf } = await import('./dates');
+    expect(periodStartOf('2026-10-31', '09:00')).toBe('2026-10-31'); // sábado 9:00: empieza
+    expect(periodStartOf('2026-10-31', '08:59')).toBe('2026-10-24'); // sábado 8:59: aún el anterior
+    expect(periodStartOf('2026-10-31', null)).toBe('2026-10-31'); // sin hora: el nuevo
+    expect(periodStartOf('2026-11-01')).toBe('2026-10-31'); // domingo
+    expect(periodStartOf('2026-11-06', '23:00')).toBe('2026-10-31'); // viernes
+  });
+
+  it('el objetivo de un partido empieza a contar el sábado de su fin de semana', async () => {
+    const { matchPeriodOf } = await import('./dates');
+    expect(matchPeriodOf('2026-10-31')).toBe('2026-10-31'); // sábado
+    expect(matchPeriodOf('2026-11-01')).toBe('2026-10-31'); // domingo
+    expect(matchPeriodOf('2026-10-30')).toBe('2026-10-31'); // viernes → sábado siguiente
+  });
+
+  it('el periodo en curso depende de la hora local', async () => {
+    const { currentPeriodIn, formatPeriodRange } = await import('./dates');
+    expect(currentPeriodIn('Europe/Madrid', new Date('2026-10-31T07:59:00Z'))).toBe('2026-10-24'); // 08:59 Madrid
+    expect(currentPeriodIn('Europe/Madrid', new Date('2026-10-31T08:00:00Z'))).toBe('2026-10-31'); // 09:00 Madrid
+    expect(formatPeriodRange('2026-10-31')).toBe('sáb 31 oct – sáb 7 nov');
+  });
+});

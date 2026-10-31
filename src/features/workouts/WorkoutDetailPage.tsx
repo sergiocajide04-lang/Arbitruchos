@@ -16,7 +16,8 @@ import { ACTIVITY_LABELS, SOURCE_LABELS, type Workout } from '@/domain/types';
 import { useUser } from '@/features/auth/AuthProvider';
 import { useActiveGroup } from '@/features/group/GroupProvider';
 import { useOnline } from '@/features/pwa/useOnline';
-import { formatLongDate, formatWeekRange, todayInTimeZone } from '@/lib/dates';
+import { formatLongDate, formatPeriodRange, todayInTimeZone } from '@/lib/dates';
+import { workoutPeriod } from '@/domain/calc/compliance';
 import { toUserMessage } from '@/lib/errors';
 import { formatDuration, formatInt, formatKm, formatPace, formatRelative, formatSpeed } from '@/lib/format';
 import { deleteWorkout, getWorkout, moderateWorkout, updateWorkout } from '@/services/api';
@@ -165,7 +166,7 @@ function WorkoutDetail({ workout: w }: { workout: Workout }) {
             ) : (
               <p className="mt-6 flex gap-2 rounded-xl border border-accent/30 bg-accent/10 p-3 text-sm">
                 <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent-text" aria-hidden />
-                Cuenta para el objetivo de la semana {formatWeekRange(w.week_start)}.
+                Cuenta para el periodo {formatPeriodRange(workoutPeriod(w))}.
               </p>
             )}
             {w.review_note && (
@@ -185,7 +186,7 @@ function WorkoutDetail({ workout: w }: { workout: Workout }) {
               <Item label="Método">
                 <Badge>{w.entry_method === 'ocr' ? 'Captura revisada' : 'Manual'}</Badge>
               </Item>
-              <Item label="Semana">{formatWeekRange(w.week_start)}</Item>
+              <Item label="Periodo">{formatPeriodRange(workoutPeriod(w))}</Item>
               {w.calories !== null && (
                 <Item label="Calorías">
                   {formatInt(w.calories)} kcal{' '}
@@ -239,7 +240,7 @@ function WorkoutDetail({ workout: w }: { workout: Workout }) {
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title="¿Eliminar este entrenamiento?"
-        description={`Se descontarán ${formatKm(w.distance_km, true)} km de la semana ${formatWeekRange(w.week_start)}. Quedará constancia en el historial de cambios.`}
+        description={`Se descontarán ${formatKm(w.distance_km, true)} km del periodo ${formatPeriodRange(workoutPeriod(w))}. Quedará constancia en el historial de cambios.`}
         footer={
           <>
             <Button variant="secondary" onClick={() => setConfirmDelete(false)}>

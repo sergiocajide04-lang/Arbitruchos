@@ -12,7 +12,8 @@ import { useActiveGroup } from '@/features/group/GroupProvider';
 import { NoSeasonState } from '@/features/seasons/NoSeasonState';
 import { SeasonPicker } from '@/features/seasons/SeasonPicker';
 import { useSeasonData } from '@/hooks/useSeasonData';
-import { formatMonthYear, formatShortDate, formatWeekRange, monthKey } from '@/lib/dates';
+import { formatMonthYear, formatPeriodRange, formatShortDate, monthKey } from '@/lib/dates';
+import { workoutPeriod } from '@/domain/calc/compliance';
 import { toUserMessage } from '@/lib/errors';
 import { formatDuration, formatKm, formatPace } from '@/lib/format';
 
@@ -32,7 +33,7 @@ export function WorkoutsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const set = <K extends keyof Filters>(k: K, v: Filters[K]) => setFilters((f) => ({ ...f, [k]: v }));
 
-  const weeks = useMemo(() => [...new Set(data.workouts.map((w) => w.week_start))].sort().reverse(), [data.workouts]);
+  const weeks = useMemo(() => [...new Set(data.workouts.map((w) => workoutPeriod(w)))].sort().reverse(), [data.workouts]);
   const months = useMemo(() => [...new Set(data.workouts.map((w) => monthKey(w.activity_date)))].sort().reverse(), [data.workouts]);
 
   const filtered = useMemo(
@@ -40,7 +41,7 @@ export function WorkoutsPage() {
       data.workouts.filter((w) => {
         if (filters.user === 'me' && w.user_id !== user.id) return false;
         if (filters.user !== 'all' && filters.user !== 'me' && w.user_id !== filters.user) return false;
-        if (filters.period.startsWith('w:') && w.week_start !== filters.period.slice(2)) return false;
+        if (filters.period.startsWith('w:') && workoutPeriod(w) !== filters.period.slice(2)) return false;
         if (filters.period.startsWith('m:') && monthKey(w.activity_date) !== filters.period.slice(2)) return false;
         if (filters.day && w.activity_date !== filters.day) return false;
         if (filters.source && w.source !== filters.source) return false;
@@ -53,9 +54,9 @@ export function WorkoutsPage() {
   const grouped = useMemo(() => {
     const map = new Map<string, Workout[]>();
     for (const w of filtered) {
-      const list = map.get(w.week_start) ?? [];
+      const list = map.get(workoutPeriod(w)) ?? [];
       list.push(w);
-      map.set(w.week_start, list);
+      map.set(workoutPeriod(w), list);
     }
     return [...map.entries()];
   }, [filtered]);
@@ -115,10 +116,10 @@ export function WorkoutsPage() {
                       </option>
                     ))}
                   </optgroup>
-                  <optgroup label="Semanas">
+                  <optgroup label="Periodos (sábado a sábado)">
                     {weeks.map((w) => (
                       <option key={w} value={`w:${w}`}>
-                        {formatWeekRange(w)}
+                        {formatPeriodRange(w)}
                       </option>
                     ))}
                   </optgroup>
@@ -180,7 +181,7 @@ export function WorkoutsPage() {
                 <section key={week} aria-labelledby={`wk-${week}`}>
                   <div className="mb-2 flex items-baseline justify-between px-1">
                     <h2 id={`wk-${week}`} className="eyebrow">
-                      Semana {formatWeekRange(week)}
+                      Periodo {formatPeriodRange(week)}
                     </h2>
                     <p className="num text-sm font-semibold text-muted">{formatKm(counted)} km computables</p>
                   </div>

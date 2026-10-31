@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { buildWeeklyLedger, isCountable, summarizeSeason, weekOf, type WeekLedger } from '@/domain/calc/compliance';
 import { buildRanking } from '@/domain/calc/ranking';
 import type { Match, Season, Workout } from '@/domain/types';
-import { todayInTimeZone, weekStartOf, type IsoDate } from '@/lib/dates';
+import { currentPeriodIn, todayInTimeZone, type IsoDate } from '@/lib/dates';
 import { listMatches, listWorkouts } from '@/services/api';
 import { useActiveGroup } from '@/features/group/GroupProvider';
 
@@ -29,7 +29,8 @@ export function useSeasonData(): SeasonData {
   const { group, season } = useActiveGroup();
   const tz = season?.timezone ?? group.timezone;
   const today = todayInTimeZone(tz);
-  const currentWeek = weekStartOf(today);
+  // Periodo de competición en curso (sábado 09:00 → sábado 08:59).
+  const currentWeek = currentPeriodIn(tz);
 
   const matchesQuery = useQuery({
     queryKey: ['matches', season?.id],

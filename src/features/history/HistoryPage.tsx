@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Flag, History, Pencil, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -16,7 +16,7 @@ import { useActiveGroup } from '@/features/group/GroupProvider';
 import { NoSeasonState } from '@/features/seasons/NoSeasonState';
 import { SeasonPicker } from '@/features/seasons/SeasonPicker';
 import { useSeasonData } from '@/hooks/useSeasonData';
-import { addDays, formatLongDate, formatWeekRange, weekStartOf } from '@/lib/dates';
+import { formatLongDate, formatPeriodRange, matchPeriodOf } from '@/lib/dates';
 import { toUserMessage } from '@/lib/errors';
 import { formatRelative } from '@/lib/format';
 import { deleteMatch, listAudit, updateMatch } from '@/services/api';
@@ -113,7 +113,7 @@ function MatchesList() {
                   </p>
                   <p className="text-xs text-muted">
                     {formatLongDate(m.match_date)}
-                    {m.competition ? ` · ${m.competition}` : ''} · semana {formatWeekRange(m.week_start)}
+                    {m.competition ? ` · ${m.competition}` : ''} · cuenta en {formatPeriodRange(matchPeriodOf(m.match_date))}
                   </p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
                     <span>
@@ -162,7 +162,7 @@ function MatchesList() {
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(null)}
         title="¿Eliminar este partido?"
-        description={deleting ? `Se quitarán ${deleting.target_km} km del objetivo de la semana ${formatWeekRange(deleting.week_start)}. Los entrenamientos no se borran.` : undefined}
+        description={deleting ? `Se quitarán ${deleting.target_km} km del objetivo del periodo ${formatPeriodRange(matchPeriodOf(deleting.match_date))}. Los entrenamientos no se borran.` : undefined}
         footer={
           <>
             <Button variant="secondary" onClick={() => setDeleting(null)}>
@@ -188,13 +188,10 @@ function CorrectMatchDialog({ match, onClose }: { match: Match; onClose(): void 
     blue: String(match.blue_cards),
     red: String(match.red_cards),
   });
-  const [week, setWeek] = useState(match.week_start);
   const [referee, setReferee] = useState(match.referee_id);
   const [reason, setReason] = useState('');
 
   const preview = previewTarget(home, away, cards);
-  const own = weekStartOf(match.match_date);
-  const weekOptions = useMemo(() => [...new Set([addDays(own, 7), own, match.week_start])], [own, match.week_start]);
 
   const save = useMutation({
     mutationFn: () => {
@@ -211,7 +208,6 @@ function CorrectMatchDialog({ match, onClose }: { match: Match; onClose(): void 
         yellow_cards: y.value,
         blue_cards: bl.value,
         red_cards: r.value,
-        week_start: week,
         referee_id: referee,
         change_reason: reason.trim(),
       });
@@ -263,15 +259,6 @@ function CorrectMatchDialog({ match, onClose }: { match: Match; onClose(): void 
           onChange={(c, v) => setCards((prev) => ({ ...prev, [c]: v }))}
           errors={{ yellow: cardErr('yellow'), blue: cardErr('blue'), red: cardErr('red') }}
         />
-        <Field label="Semana de cumplimiento">
-          <Select value={week} onChange={(e) => setWeek(e.target.value)}>
-            {weekOptions.map((w) => (
-              <option key={w} value={w}>
-                {formatWeekRange(w)}
-              </option>
-            ))}
-          </Select>
-        </Field>
         {isAdmin && (
           <Field label="Árbitro">
             <Select value={referee} onChange={(e) => setReferee(e.target.value)}>
@@ -293,8 +280,8 @@ function CorrectMatchDialog({ match, onClose }: { match: Match; onClose(): void 
               Objetivo del partido: <s className="text-muted">{match.target_km} km</s> → <strong className="text-accent-text">{preview.target} km</strong>
             </p>
             <p className="mt-1 text-xs text-muted">
-              Al guardar se recalculan las deudas y el cumplimiento de {profileOf(referee)?.display_name ?? 'este árbitro'} desde la semana{' '}
-              {formatWeekRange(week)}.
+              Al guardar se recalculan las deudas y el cumplimiento de {profileOf(referee)?.display_name ?? 'este árbitro'} desde el periodo{' '}
+              {formatPeriodRange(matchPeriodOf(match.match_date))}.
             </p>
           </div>
         )}

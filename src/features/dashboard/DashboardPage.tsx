@@ -22,7 +22,7 @@ import { ACTIVITY_LABELS, SOURCE_LABELS } from '@/domain/types';
 import { useAuth, useUser } from '@/features/auth/AuthProvider';
 import { useActiveGroup } from '@/features/group/GroupProvider';
 import { useRanking } from '@/hooks/useSeasonData';
-import { addDays, formatShortDate, formatWeekRange, isoWeekNumber, seasonWeekIndex } from '@/lib/dates';
+import { addDays, formatPeriodRange, formatShortDate, matchPeriodOf, seasonPeriodIndex } from '@/lib/dates';
 import { toUserMessage } from '@/lib/errors';
 import { formatKm, formatPct, formatRelative } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -90,7 +90,7 @@ function DashboardContent({
   const week = data.weekFor(userId);
   const nextWeek = data.weekFor(userId, addDays(data.currentWeek, 7));
   const summary = summarizeSeason(ledger);
-  const weekNo = seasonWeekIndex(season.start_date, data.currentWeek);
+  const weekNo = seasonPeriodIndex(season.start_date, data.currentWeek);
   const inSeason = data.today >= season.start_date && data.today <= season.end_date;
   const ranking = useMemo(() => sortRanking(data.rows, 'pct_desc'), [data.rows]);
   const groupTotal = useMemo(() => combineSummaries(data.rows.map((r) => r.summary)), [data.rows]);
@@ -141,7 +141,7 @@ function DashboardContent({
                 <span className="text-muted"> · {m.home_goals}-{m.away_goals}</span>
               </p>
               <p className="text-xs text-muted">
-                Semana {formatWeekRange(m.week_start)} · {formatRelative(m.created_at)}
+                Cuenta en {formatPeriodRange(matchPeriodOf(m.match_date))} · {formatRelative(m.created_at)}
               </p>
             </div>
             <span className="num text-lg font-bold leading-none text-accent-text">
@@ -170,7 +170,7 @@ function DashboardContent({
 
       {/* ---------- Semana + acciones ---------- */}
       <div className="grid gap-5 lg:grid-cols-2">
-        <WeekCard week={week} label={inSeason ? `Semana ${weekNo}` : `Semana ISO ${isoWeekNumber(data.currentWeek)}`} />
+        <WeekCard week={week} label={inSeason ? `Semana ${weekNo}` : 'Semana'} />
 
         <nav aria-label="Acciones rápidas" className="grid grid-cols-2 gap-3">
           <QuickAction to="/anadir/entrenamiento" icon={Plus} label="Registrar entrenamiento" primary />
@@ -362,7 +362,7 @@ function SeasonHero({
           <p className="mt-4 flex items-center gap-2 rounded-xl border border-border/70 bg-surface-2/60 px-3 py-2 text-xs text-muted">
             <Timer className="size-4 shrink-0 text-accent-text" aria-hidden />
             <span>
-              Próximo objetivo: <strong className="text-fg">{nextWeekTarget} km</strong> en la semana {formatWeekRange(nextWeekStart)}
+              Próximo objetivo: <strong className="text-fg">{nextWeekTarget} km</strong>, cuenta desde el sábado a las 9:00 ({formatPeriodRange(nextWeekStart)})
             </span>
           </p>
         )}
@@ -375,7 +375,7 @@ function WeekCard({ week, label }: { week: WeekLedger; label: string }) {
   const e = effectiveWeek(week);
   return (
     <Card>
-      <CardHeader eyebrow="Esta semana" title={`${label} · ${formatWeekRange(week.weekStart)}`} />
+      <CardHeader eyebrow="Esta semana" title={`${label} · ${formatPeriodRange(week.weekStart)}`} />
       <div className="p-4 pt-3 sm:p-5 sm:pt-3">
         {e.effectiveTargetKm === 0 ? (
           <p className="text-sm text-muted">

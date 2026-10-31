@@ -1,6 +1,6 @@
 import { ACTIVITY_LABELS, POLICY_LABELS, ROLE_LABELS, SEASON_STATUS_LABELS, type AuditEvent, type Profile } from '@/domain/types';
 import type { ActivityType, CompliancePolicy, MemberRole, SeasonStatus } from '@/domain/types';
-import { formatShortDate, formatWeekRange } from '@/lib/dates';
+import { formatPeriodRange, formatShortDate, matchPeriodOf } from '@/lib/dates';
 import { formatKm } from '@/lib/format';
 
 type Row = Record<string, unknown>;
@@ -21,13 +21,16 @@ export function describeAudit(ev: AuditEvent, profileOf: (id: string) => Profile
       if (ev.action === 'insert') {
         return {
           title: `registró el partido ${score(a)} de ${name(a.referee_id)}`,
-          detail: `+${s(a.target_km)} km · semana ${formatWeekRange(s(a.week_start))}`,
+          detail: `+${s(a.target_km)} km · periodo ${formatPeriodRange(matchPeriodOf(s(a.match_date)))}`,
         };
       }
       if (ev.action === 'delete') return { title: `eliminó el partido ${score(b)} de ${name(b.referee_id)}`, detail: `−${s(b.target_km)} km de objetivo` };
       const changes: string[] = [];
       if (score(a) !== score(b)) changes.push(`${score(b)} → ${score(a)} (${s(b.target_km)} → ${s(a.target_km)} km)`);
-      if (a.week_start !== b.week_start) changes.push(`semana ${formatWeekRange(s(b.week_start))} → ${formatWeekRange(s(a.week_start))}`);
+      if (a.match_date !== b.match_date) changes.push(`fecha ${formatShortDate(s(b.match_date))} → ${formatShortDate(s(a.match_date))}`);
+      for (const [k, label] of [['yellow_cards', 'amarillas'], ['blue_cards', 'azules'], ['red_cards', 'rojas']] as const) {
+        if (b[k] !== undefined && a[k] !== b[k]) changes.push(`${label} ${s(b[k])} → ${s(a[k])}`);
+      }
       if (a.referee_id !== b.referee_id) changes.push(`árbitro ${name(b.referee_id)} → ${name(a.referee_id)}`);
       return { title: `corrigió el partido de ${name(a.referee_id)}`, detail: [changes.join(' · '), ev.reason && `Motivo: ${ev.reason}`].filter(Boolean).join(' — ') };
     }

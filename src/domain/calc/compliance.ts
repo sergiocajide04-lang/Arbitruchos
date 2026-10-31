@@ -4,8 +4,11 @@
  *
  * METODOLOGÍA: compensación de deudas sin saldo a favor.
  *
- *   - Cada partido genera una OBLIGACIÓN de target_km en su semana de cumplimiento
- *     (semana ISO lunes-domingo). Las obligaciones de una misma semana se suman.
+ *   - SEMANA = periodo de competición: del sábado a las 09:00 al sábado siguiente
+ *     a las 08:59 (zona horaria de la temporada; ver periodStartOf en lib/dates).
+ *   - Cada partido genera una OBLIGACIÓN de target_km en el periodo de su fin de
+ *     semana: un partido del sábado o del domingo empieza a contar el sábado a las
+ *     09:00. Las obligaciones de un mismo periodo se suman.
  *   - Los km de los entrenamientos COMPUTABLES de una semana se asignan, en orden
  *     cronológico, a las obligaciones pendientes MÁS ANTIGUAS cuya semana ya ha
  *     empezado (semana ≤ semana del entrenamiento).
@@ -24,12 +27,12 @@
  * así que la asignación por semanas es determinista y reproducible. Editar o
  * borrar cualquier partido o entrenamiento recalcula todo desde los datos brutos.
  */
-import { compareIso, isWithin, type IsoDate } from '@/lib/dates';
+import { compareIso, isWithin, matchPeriodOf, periodStartOf, type IsoDate } from '@/lib/dates';
 import type { ActivityType, ValidationStatus } from '@/domain/types';
 
 export interface MatchLike {
   referee_id: string;
-  week_start: IsoDate;
+  match_date: IsoDate;
   target_km: number;
 }
 
@@ -37,6 +40,8 @@ export interface WorkoutLike {
   id?: string;
   user_id: string;
   activity_date: IsoDate;
+  /** "HH:MM[:SS]" o null: decide el periodo de los entrenos del sábado. */
+  activity_time?: string | null;
   week_start: IsoDate;
   distance_km: number;
   duration_s: number | null;
@@ -53,6 +58,7 @@ export interface SeasonRules {
 export type WeekPhase = 'past' | 'current' | 'upcoming';
 
 export interface WeekLedger {
+  /** Sábado en que empieza el periodo (a las 09:00). */
   weekStart: IsoDate;
   phase: WeekPhase;
   /** Objetivo nuevo de la semana (partidos asignados a ella). */
@@ -126,6 +132,11 @@ export function cappedPct(valid: number, target: number): number | null {
   return Math.min(100, Math.max(0, (valid / target) * 100));
 }
 
+/** Periodo de competición al que pertenece un entrenamiento. */
+export function workoutPeriod(w: Pick<WorkoutLike, 'activity_date' | 'activity_time'>): IsoDate {
+  return periodStartOf(w.activity_date, w.activity_time);
+}
+
 function phaseOf(weekStart: IsoDate, currentWeek: IsoDate): WeekPhase {
   const c = compareIso(weekStart, currentWeek);
   return c < 0 ? 'past' : c === 0 ? 'current' : 'upcoming';
@@ -153,13 +164,13 @@ export function buildWeeklyLedger(
   };
   for (const m of matches) {
     if (m.referee_id !== userId) continue;
-    const s = slot(m.week_start);
+    const s = slot(matchPeriodOf(m.match_date));
     s.target += m.target_km;
     s.matches += 1;
   }
   for (const w of workouts) {
     if (w.user_id !== userId || !isCountable(w, season)) continue;
-    const s = slot(w.week_start);
+    const s = slot(workoutPeriod(w));
     s.km += Number(w.distance_km);
     s.workouts += 1;
   }

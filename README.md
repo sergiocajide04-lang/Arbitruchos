@@ -284,9 +284,12 @@ Implementadas una sola vez en `src/domain/calc/` y cubiertas por pruebas.
   Ejemplo: 13-1 con 2 amarillas, 1 azul y 1 roja = 14 + 2 + 2 + 5 = **23 km**. Goles enteros 0-99 y
   tarjetas enteras 0-50; un campo vacío nunca cuenta como 0. La base de datos calcula el objetivo
   (columna generada `target_km`), así que no se puede falsear desde el navegador.
-- **Semana:** lunes a domingo en la zona horaria de la temporada. Por defecto un partido genera
-  el objetivo de la **semana siguiente** (sábado 24 → semana del 26 al 1); se puede elegir la del
-  propio partido. Un árbitro no puede tener dos partidos en la misma semana de una temporada.
+- **Semana (periodo de competición):** del **sábado a las 09:00 al sábado siguiente a las 08:59**,
+  en la zona horaria de la temporada. El objetivo de un partido empieza a contar el sábado a las
+  09:00 de su fin de semana (partido del sábado o domingo → ese sábado; del viernes → el sábado
+  siguiente). Los entrenos cuentan en el periodo de su fecha y hora; un entreno del sábado sin hora
+  cuenta en el periodo que empieza ese día. Un árbitro no puede tener dos partidos en la misma
+  semana natural de una temporada.
 - **Kilómetros computables:** entrenamientos *confirmados*, de los tipos que la temporada declara
   computables y con fecha dentro de la temporada.
 - **Compensación de deudas sin saldo a favor (metodología única):**
